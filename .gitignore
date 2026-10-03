@@ -16,3 +16,6 @@ local.properties
 
 .kotlin/
 .idea/deviceManager.xml
+
+.kotlin/
+.idea/

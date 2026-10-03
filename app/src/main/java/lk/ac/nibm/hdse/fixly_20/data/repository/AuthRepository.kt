@@ -1,19 +1,16 @@
 package lk.ac.nibm.hdse.fixly_20.data.repository
 
+import android.content.Context
 import android.net.Uri
-import com.cloudinary.android.MediaManager
-import com.cloudinary.android.callback.ErrorInfo
-import com.cloudinary.android.callback.UploadCallback
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.tasks.await
+import lk.ac.nibm.hdse.fixly_20.data.remote.CloudinaryUploader
 import lk.ac.nibm.hdse.fixly_20.model.User
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 /**
- * Repository layer — talks to Firebase Auth, Firestore, and Cloudinary for image hosting.
+ * Repository layer — talks to Firebase Auth + Firestore (data) and
+ * Cloudinary REST API (file/image/PDF uploads via OkHttp).
  */
 class AuthRepository(
     private val firebaseAuth: FirebaseAuth = FirebaseAuth.getInstance(),
@@ -30,10 +27,11 @@ class AuthRepository(
     }
 
     /**
-     * Registers a new user, optionally uploads a certificate to Cloudinary (for providers),
+     * Registers a new user, optionally uploads a certificate (image or PDF) to Cloudinary,
      * then writes the user's profile document to Firestore.
      */
     suspend fun register(
+        context: Context,
         name: String,
         email: String,
         password: String,
@@ -45,10 +43,11 @@ class AuthRepository(
             val authResult = firebaseAuth.createUserWithEmailAndPassword(email, password).await()
             val uid = authResult.user?.uid ?: throw IllegalStateException("User creation failed")
 
-            // 2. If a certificate was attached, upload it to Cloudinary
+            // 2. If a certificate was attached, upload it to Cloudinary via OkHttp REST API
             var certificateUrl: String? = null
             if (certificateUri != null) {
-                certificateUrl = uploadToCloudinary(certificateUri)
+                val uploadResult = CloudinaryUploader.uploadFile(context, certificateUri)
+                certificateUrl = uploadResult.getOrNull()
             }
 
             // 3. Save the user profile document in Firestore
@@ -65,29 +64,6 @@ class AuthRepository(
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
-        }
-    }
-
-    private suspend fun uploadToCloudinary(imageUri: Uri): String {
-        return suspendCancellableCoroutine { continuation ->
-            MediaManager.get().upload(imageUri)
-                .unsigned("fixly_preset")
-                .callback(object : UploadCallback {
-                    override fun onStart(requestId: String) {}
-                    override fun onProgress(requestId: String, bytes: Long, totalBytes: Long) {}
-                    override fun onSuccess(requestId: String, resultData: Map<*, *>) {
-                        val url = resultData["secure_url"] as? String
-                        if (url != null) {
-                            continuation.resume(url)
-                        } else {
-                            continuation.resumeWithException(IllegalStateException("Cloudinary secure_url is null"))
-                        }
-                    }
-                    override fun onError(requestId: String, error: ErrorInfo) {
-                        continuation.resumeWithException(RuntimeException(error.description))
-                    }
-                    override fun onReschedule(requestId: String, error: ErrorInfo) {}
-                }).dispatch()
         }
     }
 

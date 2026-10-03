@@ -1,5 +1,6 @@
 package lk.ac.nibm.hdse.fixly_20.viewmodel
 
+import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -45,6 +46,7 @@ class AuthViewModel(
     }
 
     fun register(
+        context: Context,
         name: String,
         email: String,
         password: String,
@@ -70,7 +72,7 @@ class AuthViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
 
-            repository.register(name, email, password, roles, certificateUri)
+            repository.register(context, name, email, password, roles, certificateUri)
                 .onSuccess {
                     _uiState.value = _uiState.value.copy(isLoading = false, isRegisterSuccessful = true)
                 }

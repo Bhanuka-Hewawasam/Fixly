@@ -1,4 +1,4 @@
-// app/build.gradle.kts — Room using KSP and Kotlin 2.0.20 + Cloudinary
+// app/build.gradle.kts — Room using KSP and Kotlin 2.0.20 + OkHttp for Cloudinary REST API
 
 plugins {
     id("com.android.application")
@@ -55,8 +55,8 @@ dependencies {
     implementation("com.google.firebase:firebase-firestore-ktx")
     implementation("com.google.firebase:firebase-storage-ktx")
 
-    // --- Cloudinary (Free image/certificate hosting) ---
-    implementation("com.cloudinary:cloudinary-android:2.5.0")
+    // --- OkHttp (for Cloudinary REST API upload) ---
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     // --- Room (Local DB) ---
     implementation("androidx.room:room-runtime:2.6.1")

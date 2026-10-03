@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -23,6 +24,8 @@ fun RegisterScreen(
     onNavigateToLogin: () -> Unit,
     viewModel: AuthViewModel = viewModel()
 ) {
+    val context = LocalContext.current
+
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -35,9 +38,9 @@ fun RegisterScreen(
 
     val uiState by viewModel.uiState.collectAsState()
 
-    // Launches the system file picker (images, PDFs, documents)
+    // OpenDocument allows picking both images and PDFs
     val certificatePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         certificateUri = uri
     }
@@ -106,38 +109,32 @@ fun RegisterScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // --- Dual-role selection: a user can be a Customer, a Provider, or both ---
         Text(
             text = "I want to:",
             style = MaterialTheme.typography.titleSmall,
             modifier = Modifier.fillMaxWidth()
         )
 
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Checkbox(checked = isCustomer, onCheckedChange = { isCustomer = it })
             Text("Book services (Customer)")
         }
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Checkbox(checked = isProvider, onCheckedChange = { isProvider = it })
             Text("Offer services (Provider)")
         }
 
-        // --- Certificate upload only shown when Provider role is selected ---
         if (isProvider) {
             Spacer(modifier = Modifier.height(12.dp))
             OutlinedButton(
-                onClick = { certificatePicker.launch("*/*") },
+                onClick = {
+                    certificatePicker.launch(arrayOf("image/*", "application/pdf"))
+                },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    if (certificateUri == null) "Upload Certificate / PDF (optional)"
-                    else "Certificate / Document Selected ✓"
+                    if (certificateUri == null) "Upload Certificate (image or PDF, optional)"
+                    else "Certificate Selected ✓"
                 )
             }
             Text(
@@ -163,7 +160,7 @@ fun RegisterScreen(
                     if (isCustomer) add("customer")
                     if (isProvider) add("provider")
                 }
-                viewModel.register(name, email, password, confirmPassword, roles, certificateUri)
+                viewModel.register(context, name, email, password, confirmPassword, roles, certificateUri)
             },
             enabled = !uiState.isLoading,
             modifier = Modifier.fillMaxWidth()
