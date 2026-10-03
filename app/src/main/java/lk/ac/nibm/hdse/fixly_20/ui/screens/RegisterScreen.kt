@@ -35,7 +35,7 @@ fun RegisterScreen(
 
     val uiState by viewModel.uiState.collectAsState()
 
-    // Launches the system file/image picker, result comes back as a Uri
+    // Launches the system file picker (images, PDFs, documents)
     val certificatePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -132,12 +132,12 @@ fun RegisterScreen(
         if (isProvider) {
             Spacer(modifier = Modifier.height(12.dp))
             OutlinedButton(
-                onClick = { certificatePicker.launch("image/*") },
+                onClick = { certificatePicker.launch("*/*") },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    if (certificateUri == null) "Upload Certificate (optional)"
-                    else "Certificate Selected ✓"
+                    if (certificateUri == null) "Upload Certificate / PDF (optional)"
+                    else "Certificate / Document Selected ✓"
                 )
             }
             Text(

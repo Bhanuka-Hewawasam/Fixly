@@ -13,6 +13,10 @@ import lk.ac.nibm.hdse.fixly_20.ui.theme.Fixly_20Theme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Initialize Cloudinary for free image/certificate hosting
+        initCloudinary()
+
         setContent {
             Fixly_20Theme {
                 Surface(
@@ -22,6 +26,18 @@ class MainActivity : ComponentActivity() {
                     AppNavigation()
                 }
             }
+        }
+    }
+
+    private fun initCloudinary() {
+        try {
+            val config = mapOf(
+                "cloud_name" to "rrsnpui6",
+                "secure" to true
+            )
+            com.cloudinary.android.MediaManager.init(this, config)
+        } catch (e: Exception) {
+            // Already initialized
         }
     }
 }

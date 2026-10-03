@@ -1,4 +1,4 @@
-// app/build.gradle.kts — Room using KSP and Kotlin 2.0.20
+// app/build.gradle.kts — Room using KSP and Kotlin 2.0.20 + Cloudinary
 
 plugins {
     id("com.android.application")
@@ -54,6 +54,9 @@ dependencies {
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("com.google.firebase:firebase-firestore-ktx")
     implementation("com.google.firebase:firebase-storage-ktx")
+
+    // --- Cloudinary (Free image/certificate hosting) ---
+    implementation("com.cloudinary:cloudinary-android:2.5.0")
 
     // --- Room (Local DB) ---
     implementation("androidx.room:room-runtime:2.6.1")
