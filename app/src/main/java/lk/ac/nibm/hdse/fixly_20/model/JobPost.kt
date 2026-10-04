@@ -21,5 +21,6 @@ data class JobPost(
     val address: String = "",
     val status: String = "Open",         // Open -> Assigned -> In Progress -> Completed
     val selectedBidId: String? = null,
+    val imageUrls: List<String> = emptyList(), // Added for multiple problem photo uploads
     @ServerTimestamp val createdAt: Date? = null
 )

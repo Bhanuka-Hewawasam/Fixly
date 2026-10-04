@@ -2,12 +2,19 @@ package lk.ac.nibm.hdse.fixly_20.ui.screens
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
 import android.content.pm.PackageManager
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,8 +26,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.location.LocationServices
 import com.google.firebase.firestore.GeoPoint
 import lk.ac.nibm.hdse.fixly_20.viewmodel.PostJobViewModel
+import java.util.Calendar
+import java.util.Locale
 
-private val categories = listOf("Plumbing", "Electrical", "Cleaning", "Other")
+private val predefinedCategories = listOf("Plumbing", "Electrical", "Cleaning", "Carpentry", "Painting", "AC Repair", "Gardening", "Other")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("MissingPermission") // permission is checked before the location call below
@@ -33,18 +42,52 @@ fun PostJobScreen(
     val context = LocalContext.current
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
-    var category by remember { mutableStateOf(categories.first()) }
+    var category by remember { mutableStateOf("") }
+    var categoryExpanded by remember { mutableStateOf(false) }
     var description by remember { mutableStateOf("") }
     var preferredDate by remember { mutableStateOf("") }
     var preferredTime by remember { mutableStateOf("") }
     var isEmergency by remember { mutableStateOf(false) }
     var address by remember { mutableStateOf("") }
+    var selectedImages by remember { mutableStateOf<List<Uri>>(emptyList()) }
 
     val uiState by viewModel.uiState.collectAsState()
 
     LaunchedEffect(uiState.isPostSuccessful) {
         if (uiState.isPostSuccessful) onJobPosted()
     }
+
+    // Multiple image picker for problem photos
+    val multiImagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris: List<Uri> ->
+        selectedImages = uris
+    }
+
+    val calendar = Calendar.getInstance()
+    val datePickerDialog = DatePickerDialog(
+        context,
+        { _, year, month, dayOfMonth ->
+            preferredDate = String.format(Locale.getDefault(), "%04d-%02d-%02d", year, month + 1, dayOfMonth)
+        },
+        calendar.get(Calendar.YEAR),
+        calendar.get(Calendar.MONTH),
+        calendar.get(Calendar.DAY_OF_MONTH)
+    )
+
+    val timePickerDialog = TimePickerDialog(
+        context,
+        { _, hourOfDay, minute ->
+            val amPm = if (hourOfDay < 12) "AM" else "PM"
+            val hour12 = if (hourOfDay == 0) 12 else if (hourOfDay > 12) hourOfDay - 12 else hourOfDay
+            preferredTime = String.format(Locale.getDefault(), "%02d:%02d %s", hour12, minute, amPm)
+        },
+        calendar.get(Calendar.HOUR_OF_DAY),
+        calendar.get(Calendar.MINUTE),
+        false
+    )
+
+    val filteredCategories = predefinedCategories.filter { it.contains(category, ignoreCase = true) }
 
     // Asks for fine-location permission; on grant, fetches the current GPS position
     val locationPermissionLauncher = rememberLauncherForActivityResult(
@@ -98,22 +141,39 @@ fun PostJobScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
-            Text("Service Category", style = MaterialTheme.typography.titleSmall)
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            // --- Auto-suggest Category Dropdown ---
+            ExposedDropdownMenuBox(
+                expanded = categoryExpanded && filteredCategories.isNotEmpty(),
+                onExpandedChange = { categoryExpanded = it }
             ) {
-                categories.forEach { option ->
-                    FilterChip(
-                        selected = category == option,
-                        onClick = { category = option },
-                        label = { Text(option) }
-                    )
+                OutlinedTextField(
+                    value = category,
+                    onValueChange = {
+                        category = it
+                        categoryExpanded = true
+                    },
+                    label = { Text("Service Category (Type to search)") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryExpanded) },
+                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryEditable, enabled = true).fillMaxWidth(),
+                    singleLine = true
+                )
+                ExposedDropdownMenu(
+                    expanded = categoryExpanded && filteredCategories.isNotEmpty(),
+                    onDismissRequest = { categoryExpanded = false }
+                ) {
+                    filteredCategories.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option) },
+                            onClick = {
+                                category = option
+                                categoryExpanded = false
+                            }
+                        )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             OutlinedTextField(
                 value = description,
@@ -125,19 +185,53 @@ fun PostJobScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            // --- Multiple Image Upload for Problem Photos ---
+            OutlinedButton(
+                onClick = { multiImagePicker.launch("image/*") },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    if (selectedImages.isEmpty()) "Attach Photos of Problem (Optional, Multiple)"
+                    else "${selectedImages.size} Photo(s) Selected ✓"
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // --- Date & Time Pickers ---
             Row(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     value = preferredDate,
-                    onValueChange = { preferredDate = it },
-                    label = { Text("Date (YYYY-MM-DD)") },
-                    modifier = Modifier.weight(1f)
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Date") },
+                    placeholder = { Text("YYYY-MM-DD") },
+                    trailingIcon = {
+                        IconButton(onClick = { datePickerDialog.show() }) {
+                            Icon(Icons.Default.DateRange, contentDescription = "Pick Date")
+                        }
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { datePickerDialog.show() },
+                    enabled = false
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 OutlinedTextField(
                     value = preferredTime,
-                    onValueChange = { preferredTime = it },
+                    onValueChange = {},
+                    readOnly = true,
                     label = { Text("Time") },
-                    modifier = Modifier.weight(1f)
+                    placeholder = { Text("HH:MM AM/PM") },
+                    trailingIcon = {
+                        IconButton(onClick = { timePickerDialog.show() }) {
+                            Icon(Icons.Default.AccessTime, contentDescription = "Pick Time")
+                        }
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { timePickerDialog.show() },
+                    enabled = false
                 )
             }
 
@@ -146,7 +240,7 @@ fun PostJobScreen(
             OutlinedTextField(
                 value = address,
                 onValueChange = { address = it },
-                label = { Text("Address") },
+                label = { Text("Address (Optional if GPS captured)") },
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -183,7 +277,7 @@ fun PostJobScreen(
 
             Button(
                 onClick = {
-                    viewModel.postJob(category, description, preferredDate, preferredTime, isEmergency, address)
+                    viewModel.postJob(context, category, description, preferredDate, preferredTime, isEmergency, address, selectedImages)
                 },
                 enabled = !uiState.isLoading,
                 modifier = Modifier.fillMaxWidth()

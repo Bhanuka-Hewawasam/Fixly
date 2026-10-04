@@ -1,5 +1,7 @@
 package lk.ac.nibm.hdse.fixly_20.viewmodel
 
+import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
@@ -36,16 +38,28 @@ class PostJobViewModel(
     }
 
     fun postJob(
+        context: Context,
         category: String,
         description: String,
         preferredDate: String,
         preferredTime: String,
         isEmergency: Boolean,
-        address: String
+        address: String,
+        imageUris: List<Uri>
     ) {
-        if (category.isBlank() || description.isBlank() || address.isBlank()) {
-            _uiState.value = _uiState.value.copy(errorMessage = "Please fill in category, description and address")
-            return
+        when {
+            category.isBlank() -> {
+                _uiState.value = _uiState.value.copy(errorMessage = "Please select a service category")
+                return
+            }
+            description.isBlank() -> {
+                _uiState.value = _uiState.value.copy(errorMessage = "Please describe the problem")
+                return
+            }
+            address.isBlank() && _uiState.value.capturedLocation == null -> {
+                _uiState.value = _uiState.value.copy(errorMessage = "Please enter an address or capture your GPS location")
+                return
+            }
         }
 
         viewModelScope.launch {
@@ -56,6 +70,7 @@ class PostJobViewModel(
             val customerName = profileResult.getOrNull()?.name ?: "Customer"
 
             val result = jobRepository.postJob(
+                context = context,
                 customerName = customerName,
                 category = category,
                 description = description,
@@ -63,7 +78,8 @@ class PostJobViewModel(
                 preferredTime = preferredTime,
                 isEmergency = isEmergency,
                 location = _uiState.value.capturedLocation,
-                address = address
+                address = address,
+                imageUris = imageUris
             )
 
             result.onSuccess {
