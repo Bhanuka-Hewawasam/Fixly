@@ -45,6 +45,23 @@ class AuthViewModel(
         }
     }
 
+    fun loginWithGoogle(idToken: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+
+            repository.loginWithGoogle(idToken)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(isLoading = false, isLoginSuccessful = true)
+                }
+                .onFailure { exception ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = exception.localizedMessage ?: "Google Sign-In failed. Please try again."
+                    )
+                }
+        }
+    }
+
     fun register(
         context: Context,
         name: String,
