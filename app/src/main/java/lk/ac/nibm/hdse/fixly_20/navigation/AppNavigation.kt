@@ -1,6 +1,5 @@
 package lk.ac.nibm.hdse.fixly_20.navigation
 
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -8,6 +7,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import lk.ac.nibm.hdse.fixly_20.ui.screens.AcceptedJobsScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.AvailableJobsScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.HomeScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.JobBidsScreen
@@ -23,7 +23,7 @@ object Routes {
     const val POST_JOB = "post_job"
     const val MY_BOOKINGS = "my_bookings"
     const val AVAILABLE_JOBS = "available_jobs"
-    const val ACCEPTED_JOBS = "accepted_jobs"      // TODO: next step
+    const val ACCEPTED_JOBS = "accepted_jobs"
     const val JOB_BIDS = "job_bids/{jobId}"
     fun jobBids(jobId: String) = "job_bids/$jobId"
 }
@@ -86,6 +86,10 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
             )
         }
 
+        composable(Routes.ACCEPTED_JOBS) {
+            AcceptedJobsScreen(onBack = { navController.popBackStack() })
+        }
+
         composable(
             route = Routes.JOB_BIDS,
             arguments = listOf(navArgument("jobId") { type = NavType.StringType })
@@ -97,8 +101,5 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                 onBidSelected = { navController.popBackStack() }
             )
         }
-
-        // --- Placeholder — built in upcoming step ---
-        composable(Routes.ACCEPTED_JOBS) { Text("Accepted Jobs screen — coming next") }
     }
 }

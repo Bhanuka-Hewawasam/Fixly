@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_name">Fixly_2.0</string>
+    <string name="app_name">Fixly</string>
+    <string name="app_tagline">Trusted home services, made simple</string>
 </resources>

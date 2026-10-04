@@ -8,31 +8,43 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.location.LocationServices
 import com.google.firebase.firestore.GeoPoint
+import lk.ac.nibm.hdse.fixly_20.ui.components.CategoryCard
+import lk.ac.nibm.hdse.fixly_20.ui.components.FixlyPrimaryButton
+import lk.ac.nibm.hdse.fixly_20.ui.components.FixlySecondaryButton
+import lk.ac.nibm.hdse.fixly_20.ui.components.FixlyTextField
+import lk.ac.nibm.hdse.fixly_20.ui.theme.FixlyEmergency
+import lk.ac.nibm.hdse.fixly_20.ui.theme.FixlyEmergencyContainer
 import lk.ac.nibm.hdse.fixly_20.viewmodel.PostJobViewModel
 import java.util.Calendar
 import java.util.Locale
 
-private val predefinedCategories = listOf("Plumbing", "Electrical", "Cleaning", "Carpentry", "Painting", "AC Repair", "Gardening", "Other")
+private val categories = listOf("Plumbing", "Electrical", "Cleaning", "Carpentry", "Painting", "AC Repair", "Gardening", "Other")
 
 @OptIn(ExperimentalMaterial3Api::class)
-@SuppressLint("MissingPermission") // permission is checked before the location call below
+@SuppressLint("MissingPermission")
 @Composable
 fun PostJobScreen(
     onJobPosted: () -> Unit,
@@ -42,8 +54,7 @@ fun PostJobScreen(
     val context = LocalContext.current
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
-    var category by remember { mutableStateOf("") }
-    var categoryExpanded by remember { mutableStateOf(false) }
+    var selectedCategory by remember { mutableStateOf("Plumbing") }
     var description by remember { mutableStateOf("") }
     var preferredDate by remember { mutableStateOf("") }
     var preferredTime by remember { mutableStateOf("") }
@@ -57,7 +68,6 @@ fun PostJobScreen(
         if (uiState.isPostSuccessful) onJobPosted()
     }
 
-    // Multiple image picker for problem photos
     val multiImagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents()
     ) { uris: List<Uri> ->
@@ -87,9 +97,6 @@ fun PostJobScreen(
         false
     )
 
-    val filteredCategories = predefinedCategories.filter { it.contains(category, ignoreCase = true) }
-
-    // Asks for fine-location permission; on grant, fetches the current GPS position
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -127,11 +134,46 @@ fun PostJobScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Post a Job") },
+                title = {
+                    Text(
+                        "Post a Repair Job",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                    )
+                },
                 navigationIcon = {
-                    TextButton(onClick = onBack) { Text("Cancel") }
-                }
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
+        },
+        bottomBar = {
+            Surface(
+                shadowElevation = 8.dp,
+                color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Box(modifier = Modifier.padding(16.dp)) {
+                    FixlyPrimaryButton(
+                        text = "Submit Job Request",
+                        icon = Icons.AutoMirrored.Filled.Send,
+                        isLoading = uiState.isLoading,
+                        onClick = {
+                            viewModel.postJob(
+                                context,
+                                selectedCategory,
+                                description,
+                                preferredDate,
+                                preferredTime,
+                                isEmergency,
+                                address,
+                                selectedImages
+                            )
+                        }
+                    )
+                }
+            }
         }
     ) { padding ->
         Column(
@@ -139,157 +181,238 @@ fun PostJobScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp)
+                .padding(20.dp)
         ) {
-            // --- Auto-suggest Category Dropdown ---
-            ExposedDropdownMenuBox(
-                expanded = categoryExpanded && filteredCategories.isNotEmpty(),
-                onExpandedChange = { categoryExpanded = it }
+            // --- Section 1: Service Category ---
+            FormSectionHeader(number = "1", title = "Select Service Category")
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Horizontal Scrollable / Grid Category Selection
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                OutlinedTextField(
-                    value = category,
-                    onValueChange = {
-                        category = it
-                        categoryExpanded = true
-                    },
-                    label = { Text("Service Category (Type to search)") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryExpanded) },
-                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryEditable, enabled = true).fillMaxWidth(),
-                    singleLine = true
-                )
-                ExposedDropdownMenu(
-                    expanded = categoryExpanded && filteredCategories.isNotEmpty(),
-                    onDismissRequest = { categoryExpanded = false }
-                ) {
-                    filteredCategories.forEach { option ->
-                        DropdownMenuItem(
-                            text = { Text(option) },
-                            onClick = {
-                                category = option
-                                categoryExpanded = false
-                            }
-                        )
-                    }
+                items(categories) { category ->
+                    CategoryCard(
+                        category = category,
+                        isSelected = selectedCategory == category,
+                        onClick = { selectedCategory = category },
+                        modifier = Modifier.width(105.dp)
+                    )
                 }
             }
 
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // --- Section 2: Problem Description & Photos ---
+            FormSectionHeader(number = "2", title = "Describe the Issue")
             Spacer(modifier = Modifier.height(12.dp))
 
-            OutlinedTextField(
+            FixlyTextField(
                 value = description,
                 onValueChange = { description = it },
-                label = { Text("Describe the problem") },
-                minLines = 3,
-                modifier = Modifier.fillMaxWidth()
+                label = "Problem Description",
+                placeholder = "Describe what needs repair, e.g. 'Leaking kitchen pipe under the sink'",
+                singleLine = false,
+                minLines = 3
             )
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // --- Multiple Image Upload for Problem Photos ---
-            OutlinedButton(
-                onClick = { multiImagePicker.launch("image/*") },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    if (selectedImages.isEmpty()) "Attach Photos of Problem (Optional, Multiple)"
-                    else "${selectedImages.size} Photo(s) Selected ✓"
-                )
-            }
+            // Photo Attachment Picker
+            FixlySecondaryButton(
+                text = if (selectedImages.isEmpty()) "Attach Photos of Problem (Optional)" else "${selectedImages.size} Photo(s) Attached ✓",
+                icon = Icons.Default.AddAPhoto,
+                onClick = { multiImagePicker.launch("image/*") }
+            )
 
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // --- Section 3: Schedule Date & Time ---
+            FormSectionHeader(number = "3", title = "Preferred Schedule")
             Spacer(modifier = Modifier.height(12.dp))
 
-            // --- Date & Time Pickers ---
-            Row(modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(
-                    value = preferredDate,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Date") },
-                    placeholder = { Text("YYYY-MM-DD") },
-                    trailingIcon = {
-                        IconButton(onClick = { datePickerDialog.show() }) {
-                            Icon(Icons.Default.DateRange, contentDescription = "Pick Date")
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(modifier = Modifier.weight(1f).clickable { datePickerDialog.show() }) {
+                    FixlyTextField(
+                        value = preferredDate,
+                        onValueChange = {},
+                        label = "Date",
+                        placeholder = "YYYY-MM-DD",
+                        readOnly = true,
+                        enabled = false,
+                        trailingIcon = {
+                            IconButton(onClick = { datePickerDialog.show() }) {
+                                Icon(Icons.Default.DateRange, contentDescription = "Pick Date", tint = MaterialTheme.colorScheme.primary)
+                            }
                         }
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { datePickerDialog.show() },
-                    enabled = false
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                OutlinedTextField(
-                    value = preferredTime,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Time") },
-                    placeholder = { Text("HH:MM AM/PM") },
-                    trailingIcon = {
-                        IconButton(onClick = { timePickerDialog.show() }) {
-                            Icon(Icons.Default.AccessTime, contentDescription = "Pick Time")
+                    )
+                }
+
+                Box(modifier = Modifier.weight(1f).clickable { timePickerDialog.show() }) {
+                    FixlyTextField(
+                        value = preferredTime,
+                        onValueChange = {},
+                        label = "Time",
+                        placeholder = "e.g. 10:00 AM",
+                        readOnly = true,
+                        enabled = false,
+                        trailingIcon = {
+                            IconButton(onClick = { timePickerDialog.show() }) {
+                                Icon(Icons.Default.AccessTime, contentDescription = "Pick Time", tint = MaterialTheme.colorScheme.primary)
+                            }
                         }
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { timePickerDialog.show() },
-                    enabled = false
-                )
+                    )
+                }
             }
 
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // --- Section 4: Location & GPS ---
+            FormSectionHeader(number = "4", title = "Location & Address")
             Spacer(modifier = Modifier.height(12.dp))
 
-            OutlinedTextField(
+            FixlyTextField(
                 value = address,
                 onValueChange = { address = it },
-                label = { Text("Address (Optional if GPS captured)") },
-                modifier = Modifier.fillMaxWidth()
+                label = "Property Address / Landmark",
+                placeholder = "e.g. No. 45, Main Street, Colombo 03",
+                leadingIcon = {
+                    Icon(Icons.Default.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                }
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             OutlinedButton(
                 onClick = { requestLocation() },
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(
+                    1.dp,
+                    if (uiState.capturedLocation != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                ),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = if (uiState.capturedLocation != null) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else MaterialTheme.colorScheme.surface
+                ),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                when {
-                    uiState.isFetchingLocation -> {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Getting location...")
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                ) {
+                    when {
+                        uiState.isFetchingLocation -> {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Detecting GPS position...")
+                        }
+                        uiState.capturedLocation != null -> {
+                            Icon(Icons.Default.GpsFixed, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                "GPS Captured (${String.format(Locale.US, "%.4f, %.4f", uiState.capturedLocation?.latitude, uiState.capturedLocation?.longitude)}) ✓",
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                        }
+                        else -> {
+                            Icon(Icons.Default.MyLocation, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Use Current GPS Location")
+                        }
                     }
-                    uiState.capturedLocation != null -> Text("Location Captured ✓")
-                    else -> Text("Use Current Location (GPS)")
                 }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = isEmergency, onCheckedChange = { isEmergency = it })
-                Text("This is an emergency — find nearby providers urgently")
-            }
-
-            uiState.errorMessage?.let { message ->
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            Button(
-                onClick = {
-                    viewModel.postJob(context, category, description, preferredDate, preferredTime, isEmergency, address, selectedImages)
-                },
-                enabled = !uiState.isLoading,
+            // --- Section 5: Emergency Priority Toggle ---
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = if (isEmergency) FixlyEmergencyContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                border = BorderStroke(1.dp, if (isEmergency) FixlyEmergency else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                if (uiState.isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                } else {
-                    Text("Post Job")
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.FlashOn,
+                        contentDescription = null,
+                        tint = if (isEmergency) FixlyEmergency else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Emergency / Urgent Request",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Text(
+                            text = "Flags job as high priority for faster matching with nearby service providers.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = isEmergency,
+                        onCheckedChange = { isEmergency = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = FixlyEmergency,
+                            checkedTrackColor = FixlyEmergencyContainer
+                        )
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            // Error Display
+            uiState.errorMessage?.let { message ->
+                Spacer(modifier = Modifier.height(16.dp))
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = message,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
         }
+    }
+}
+
+@Composable
+private fun FormSectionHeader(number: String, title: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(24.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    text = number,
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+        )
     }
 }

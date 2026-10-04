@@ -1,17 +1,30 @@
 package lk.ac.nibm.hdse.fixly_20.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import lk.ac.nibm.hdse.fixly_20.model.JobPost
+import lk.ac.nibm.hdse.fixly_20.ui.components.EmergencyChip
+import lk.ac.nibm.hdse.fixly_20.ui.components.EmptyStateView
+import lk.ac.nibm.hdse.fixly_20.ui.components.FixlyPrimaryButton
+import lk.ac.nibm.hdse.fixly_20.ui.components.FixlyTextField
+import lk.ac.nibm.hdse.fixly_20.ui.components.getCategoryIcon
 import lk.ac.nibm.hdse.fixly_20.viewmodel.AvailableJobsViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -23,7 +36,6 @@ fun AvailableJobsScreen(
     val uiState by viewModel.uiState.collectAsState()
     var selectedJob by remember { mutableStateOf<JobPost?>(null) }
 
-    // Show a quick confirmation and close the dialog once a bid is submitted
     LaunchedEffect(uiState.bidSubmittedJobId) {
         if (uiState.bidSubmittedJobId != null) {
             selectedJob = null
@@ -34,32 +46,55 @@ fun AvailableJobsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Available Jobs") },
-                navigationIcon = { TextButton(onClick = onBack) { Text("Back") } }
+                title = {
+                    Text(
+                        "Available Jobs",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         }
     ) { padding ->
         when {
             uiState.isLoading -> {
-                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
             }
 
             uiState.jobs.isEmpty() -> {
-                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    Text("No open jobs right now. Check back soon!")
-                }
+                EmptyStateView(
+                    icon = Icons.Default.WorkOutline,
+                    title = "No Open Jobs Right Now",
+                    message = "There are no open repair requests at the moment. Check back soon for new customer job postings!",
+                    modifier = Modifier.padding(padding)
+                )
             }
 
             else -> {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize().padding(padding),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
                     contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    items(uiState.jobs) { job ->
-                        JobCard(job = job, onPlaceBid = { selectedJob = job })
+                    items(uiState.jobs, key = { it.jobId }) { job ->
+                        AvailableJobCard(
+                            job = job,
+                            onPlaceBid = { selectedJob = job }
+                        )
                     }
                 }
             }
@@ -78,31 +113,121 @@ fun AvailableJobsScreen(
 }
 
 @Composable
-private fun JobCard(job: JobPost, onPlaceBid: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
+private fun AvailableJobCard(
+    job: JobPost,
+    onPlaceBid: () -> Unit
+) {
+    ElevatedCard(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            // Header
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(job.category, style = MaterialTheme.typography.titleMedium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer)
+                    ) {
+                        Icon(
+                            imageVector = getCategoryIcon(job.category),
+                            contentDescription = job.category,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = job.category,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                }
+
                 if (job.isEmergency) {
-                    AssistChip(onClick = {}, label = { Text("URGENT") })
+                    EmergencyChip()
                 }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(job.description, style = MaterialTheme.typography.bodyMedium)
+            Spacer(modifier = Modifier.height(12.dp))
 
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("📍 ${job.address}", style = MaterialTheme.typography.bodySmall)
-            Text("🗓 ${job.preferredDate} ${job.preferredTime}", style = MaterialTheme.typography.bodySmall)
-            Text("Posted by ${job.customerName}", style = MaterialTheme.typography.bodySmall)
+            Text(
+                text = job.description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
 
             Spacer(modifier = Modifier.height(12.dp))
-            Button(onClick = onPlaceBid, modifier = Modifier.fillMaxWidth()) {
-                Text("Place Bid")
+
+            // Info items
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (job.address.isNotBlank()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = job.address,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                if (job.preferredDate.isNotBlank()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Event,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "${job.preferredDate} at ${job.preferredTime}".trim(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                if (job.customerName.isNotBlank()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Customer: ${job.customerName}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            FixlyPrimaryButton(
+                text = "Place Price Bid",
+                icon = Icons.Default.Gavel,
+                onClick = onPlaceBid
+            )
         }
     }
 }
@@ -120,47 +245,71 @@ private fun BidDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Bid on: ${job.category}") },
+        title = {
+            Text(
+                text = "Place Bid: ${job.category}",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+            )
+        },
         text = {
             Column {
-                OutlinedTextField(
+                Text(
+                    text = "Submit your price proposal and optional note for the customer.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                FixlyTextField(
                     value = price,
                     onValueChange = { price = it },
-                    label = { Text("Your Price (Rs.)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    label = "Your Bid Price (LKR / Rs.)",
+                    placeholder = "e.g. 2500",
+                    leadingIcon = {
+                        Icon(Icons.Default.Payments, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                FixlyTextField(
                     value = message,
                     onValueChange = { message = it },
-                    label = { Text("Message (optional)") },
-                    modifier = Modifier.fillMaxWidth()
+                    label = "Note to Customer (Optional)",
+                    placeholder = "e.g. I can visit tomorrow morning and include parts guarantee.",
+                    singleLine = false,
+                    minLines = 2
                 )
-                errorMessage?.let {
+
+                errorMessage?.let { err ->
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        text = err,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
             }
         },
         confirmButton = {
-            Button(
+            FixlyPrimaryButton(
+                text = "Submit Bid",
+                isLoading = isSubmitting,
+                enabled = price.toDoubleOrNull() != null && price.toDoubleOrNull()!! > 0,
                 onClick = {
                     val priceValue = price.toDoubleOrNull()
                     if (priceValue != null) onSubmit(priceValue, message)
                 },
-                enabled = !isSubmitting && price.toDoubleOrNull() != null
-            ) {
-                if (isSubmitting) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                } else {
-                    Text("Submit Bid")
-                }
-            }
+                modifier = Modifier.widthIn(min = 120.dp)
+            )
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+        shape = RoundedCornerShape(20.dp)
     )
 }
