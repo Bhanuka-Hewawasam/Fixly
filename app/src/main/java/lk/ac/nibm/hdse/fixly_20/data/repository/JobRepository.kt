@@ -66,10 +66,21 @@ class JobRepository(
         }
     }
 
-    /** Real-time stream of all open jobs — used by the Provider's Available Jobs screen. */
-    fun observeOpenJobs(): Flow<List<JobPost>> = callbackFlow {
-        val listener = firestore.collection("jobPosts")
+    /**
+     * Real-time stream of open jobs, filtered to the provider's own service categories.
+     * If providerCategories is empty, all open jobs are shown (fallback, shouldn't normally happen
+     * since registration now requires at least one category for providers).
+     */
+    fun observeOpenJobs(providerCategories: List<String>): Flow<List<JobPost>> = callbackFlow {
+        var query: Query = firestore.collection("jobPosts")
             .whereEqualTo("status", "Open")
+
+        // Firestore whereIn requires a non-empty list (max 10 values)
+        if (providerCategories.isNotEmpty() && providerCategories.size <= 10) {
+            query = query.whereIn("category", providerCategories)
+        }
+
+        val listener = query
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     error.printStackTrace()
@@ -86,7 +97,6 @@ class JobRepository(
         awaitClose { listener.remove() }
     }
 
-    /** Real-time stream of the logged-in CUSTOMER's own jobs — used by My Bookings. */
     fun observeCustomerJobs(): Flow<List<JobPost>> = callbackFlow {
         val customerId = firebaseAuth.currentUser?.uid
         if (customerId == null) {

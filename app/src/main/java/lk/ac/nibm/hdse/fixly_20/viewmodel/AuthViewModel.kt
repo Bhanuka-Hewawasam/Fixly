@@ -31,7 +31,6 @@ class AuthViewModel(
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-
             repository.login(email, password)
                 .onSuccess {
                     _uiState.value = _uiState.value.copy(isLoading = false, isLoginSuccessful = true)
@@ -48,7 +47,6 @@ class AuthViewModel(
     fun loginWithGoogle(idToken: String) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-
             repository.loginWithGoogle(idToken)
                 .onSuccess {
                     _uiState.value = _uiState.value.copy(isLoading = false, isLoginSuccessful = true)
@@ -69,6 +67,7 @@ class AuthViewModel(
         password: String,
         confirmPassword: String,
         roles: List<String>,
+        serviceCategories: List<String>,
         certificateUri: Uri?
     ) {
         when {
@@ -84,12 +83,16 @@ class AuthViewModel(
                 _uiState.value = _uiState.value.copy(errorMessage = "Select at least one role")
                 return
             }
+            roles.contains("provider") && serviceCategories.isEmpty() -> {
+                _uiState.value = _uiState.value.copy(errorMessage = "Select at least one service category")
+                return
+            }
         }
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
 
-            repository.register(context, name, email, password, roles, certificateUri)
+            repository.register(context, name, email, password, roles, serviceCategories, certificateUri)
                 .onSuccess {
                     _uiState.value = _uiState.value.copy(isLoading = false, isRegisterSuccessful = true)
                 }

@@ -15,7 +15,7 @@ data class AvailableJobsUiState(
     val jobs: List<JobPost> = emptyList(),
     val errorMessage: String? = null,
     val isSubmittingBid: Boolean = false,
-    val bidSubmittedJobId: String? = null // used to show a confirmation + close the dialog
+    val bidSubmittedJobId: String? = null
 )
 
 class AvailableJobsViewModel(
@@ -29,10 +29,13 @@ class AvailableJobsViewModel(
 
     init {
         viewModelScope.launch {
-            jobRepository.observeOpenJobs()
-                .collect { jobs ->
-                    _uiState.value = _uiState.value.copy(isLoading = false, jobs = jobs)
-                }
+            // First find out what categories THIS provider is registered for...
+            val myCategories = userRepository.getCurrentUserProfile().getOrNull()?.serviceCategories ?: emptyList()
+
+            // ...then only stream jobs that match those categories
+            jobRepository.observeOpenJobs(myCategories).collect { jobs ->
+                _uiState.value = _uiState.value.copy(isLoading = false, jobs = jobs)
+            }
         }
     }
 
@@ -44,10 +47,7 @@ class AvailableJobsViewModel(
 
             bidRepository.submitBid(jobId, providerName, price, message)
                 .onSuccess {
-                    _uiState.value = _uiState.value.copy(
-                        isSubmittingBid = false,
-                        bidSubmittedJobId = jobId
-                    )
+                    _uiState.value = _uiState.value.copy(isSubmittingBid = false, bidSubmittedJobId = jobId)
                 }
                 .onFailure { exception ->
                     _uiState.value = _uiState.value.copy(
