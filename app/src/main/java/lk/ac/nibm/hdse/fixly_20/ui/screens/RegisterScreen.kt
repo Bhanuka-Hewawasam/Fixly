@@ -18,7 +18,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import lk.ac.nibm.hdse.fixly_20.viewmodel.AuthViewModel
 
-// Same category list used when a Customer posts a job — keeps matching consistent
 private val serviceCategoryOptions = listOf("Plumbing", "Electrical", "Cleaning", "Other")
 
 @Composable
@@ -29,16 +28,19 @@ fun RegisterScreen(
 ) {
     val context = LocalContext.current
 
+    // --- Step control: 1 = account details, 2 = role + category ---
+    var currentStep by remember { mutableIntStateOf(1) }
+
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
+    var phoneNumber by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
+    var step1Error by remember { mutableStateOf<String?>(null) }
 
     var isCustomer by remember { mutableStateOf(true) }
     var isProvider by remember { mutableStateOf(false) }
-
     val selectedCategories = remember { mutableStateMapOf<String, Boolean>() }
-
     var certificateUri by remember { mutableStateOf<Uri?>(null) }
 
     val uiState by viewModel.uiState.collectAsState()
@@ -60,119 +62,170 @@ fun RegisterScreen(
     ) {
         Spacer(modifier = Modifier.height(16.dp))
         Text(text = "Create Account", style = MaterialTheme.typography.headlineMedium)
+        Text(
+            text = if (currentStep == 1) "Step 1 of 2 — Your details" else "Step 2 of 2 — How you'll use Fixly",
+            style = MaterialTheme.typography.bodySmall
+        )
         Spacer(modifier = Modifier.height(24.dp))
 
-        OutlinedTextField(
-            value = name, onValueChange = { name = it },
-            label = { Text("Full Name") }, singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-
-        OutlinedTextField(
-            value = email, onValueChange = { email = it },
-            label = { Text("Email") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            singleLine = true, modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-
-        OutlinedTextField(
-            value = password, onValueChange = { password = it },
-            label = { Text("Password") },
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            singleLine = true, modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-
-        OutlinedTextField(
-            value = confirmPassword, onValueChange = { confirmPassword = it },
-            label = { Text("Confirm Password") },
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            singleLine = true, modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(20.dp))
-
-        Text("I want to:", style = MaterialTheme.typography.titleSmall, modifier = Modifier.fillMaxWidth())
-
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Checkbox(checked = isCustomer, onCheckedChange = { isCustomer = it })
-            Text("Book services (Customer)")
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Checkbox(checked = isProvider, onCheckedChange = { isProvider = it })
-            Text("Offer services (Provider)")
-        }
-
-        if (isProvider) {
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                "What services do you offer?",
-                style = MaterialTheme.typography.titleSmall,
+        if (currentStep == 1) {
+            // ---------------- STEP 1: Account details ----------------
+            OutlinedTextField(
+                value = name, onValueChange = { name = it },
+                label = { Text("Full Name") }, singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
-            Text(
-                "This decides which job posts you'll see — an electrician won't see plumbing jobs.",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            serviceCategoryOptions.forEach { option ->
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Checkbox(
-                        checked = selectedCategories[option] ?: false,
-                        onCheckedChange = { checked -> selectedCategories[option] = checked }
-                    )
-                    Text(option)
-                }
+            OutlinedTextField(
+                value = email, onValueChange = { email = it },
+                label = { Text("Email") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                singleLine = true, modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = phoneNumber, onValueChange = { phoneNumber = it },
+                label = { Text("Phone Number") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                singleLine = true, modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = password, onValueChange = { password = it },
+                label = { Text("Password") },
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                singleLine = true, modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = confirmPassword, onValueChange = { confirmPassword = it },
+                label = { Text("Confirm Password") },
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                singleLine = true, modifier = Modifier.fillMaxWidth()
+            )
+
+            step1Error?.let { message ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
-            OutlinedButton(
-                onClick = { certificatePicker.launch(arrayOf("image/*", "application/pdf")) },
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Button(
+                onClick = {
+                    step1Error = when {
+                        name.isBlank() || email.isBlank() || phoneNumber.isBlank() || password.isBlank() ->
+                            "Please fill in all fields"
+                        password != confirmPassword -> "Passwords don't match"
+                        else -> null
+                    }
+                    if (step1Error == null) currentStep = 2
+                },
                 modifier = Modifier.fillMaxWidth()
             ) {
+                Text("Next")
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            TextButton(onClick = onNavigateToLogin) { Text("Already have an account? Login") }
+
+        } else {
+            // ---------------- STEP 2: Role + category ----------------
+            Text("I want to:", style = MaterialTheme.typography.titleSmall, modifier = Modifier.fillMaxWidth())
+
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Checkbox(checked = isCustomer, onCheckedChange = { isCustomer = it })
+                Text("Book services (Customer)")
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Checkbox(checked = isProvider, onCheckedChange = { isProvider = it })
+                Text("Offer services (Provider)")
+            }
+
+            if (isProvider) {
+                Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    if (certificateUri == null) "Upload Certificate (image or PDF, optional)"
-                    else "Certificate Selected ✓"
+                    "What services do you offer?",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    "This decides which job posts you'll see — an electrician won't see plumbing jobs.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+
+                serviceCategoryOptions.forEach { option ->
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Checkbox(
+                            checked = selectedCategories[option] ?: false,
+                            onCheckedChange = { checked -> selectedCategories[option] = checked }
+                        )
+                        Text(option)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = { certificatePicker.launch(arrayOf("image/*", "application/pdf")) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        if (certificateUri == null) "Upload Certificate (image or PDF, optional)"
+                        else "Certificate Selected ✓"
+                    )
+                }
+                Text(
+                    "Providers with a verified certificate get a trust badge",
+                    style = MaterialTheme.typography.bodySmall
                 )
             }
-            Text(
-                "Providers with a verified certificate get a trust badge",
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
 
-        uiState.errorMessage?.let { message ->
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Button(
-            onClick = {
-                val roles = buildList {
-                    if (isCustomer) add("customer")
-                    if (isProvider) add("provider")
-                }
-                val categories = selectedCategories.filter { it.value }.keys.toList()
-                viewModel.register(context, name, email, password, confirmPassword, roles, categories, certificateUri)
-            },
-            enabled = !uiState.isLoading,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            if (uiState.isLoading) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-            } else {
-                Text("Register")
+            uiState.errorMessage?.let { message ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
-        }
 
-        Spacer(modifier = Modifier.height(16.dp))
-        TextButton(onClick = onNavigateToLogin) { Text("Already have an account? Login") }
-        Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Row(modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = { currentStep = 1 },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Back")
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Button(
+                    onClick = {
+                        val roles = buildList {
+                            if (isCustomer) add("customer")
+                            if (isProvider) add("provider")
+                        }
+                        val categories = selectedCategories.filter { it.value }.keys.toList()
+                        viewModel.register(
+                            context, name, email, phoneNumber, password, confirmPassword,
+                            roles, categories, certificateUri
+                        )
+                    },
+                    enabled = !uiState.isLoading,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    if (uiState.isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Register")
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
     }
 }

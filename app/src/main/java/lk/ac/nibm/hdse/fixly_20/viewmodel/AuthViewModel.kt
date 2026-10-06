@@ -64,6 +64,7 @@ class AuthViewModel(
         context: Context,
         name: String,
         email: String,
+        phoneNumber: String,
         password: String,
         confirmPassword: String,
         roles: List<String>,
@@ -71,7 +72,7 @@ class AuthViewModel(
         certificateUri: Uri?
     ) {
         when {
-            name.isBlank() || email.isBlank() || password.isBlank() -> {
+            name.isBlank() || email.isBlank() || phoneNumber.isBlank() || password.isBlank() -> {
                 _uiState.value = _uiState.value.copy(errorMessage = "Please fill in all fields")
                 return
             }
@@ -92,7 +93,7 @@ class AuthViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
 
-            repository.register(context, name, email, password, roles, serviceCategories, certificateUri)
+            repository.register(context, name, email, phoneNumber, password, roles, serviceCategories, certificateUri)
                 .onSuccess {
                     _uiState.value = _uiState.value.copy(isLoading = false, isRegisterSuccessful = true)
                 }
