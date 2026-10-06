@@ -1,5 +1,7 @@
 package lk.ac.nibm.hdse.fixly_20.model
 
+enum class AccountType { CUSTOMER, PROVIDER }
+
 data class User(
     val uid: String = "",
     val name: String = "",

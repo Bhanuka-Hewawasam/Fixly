@@ -13,7 +13,9 @@ data class AuthUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val isLoginSuccessful: Boolean = false,
-    val isRegisterSuccessful: Boolean = false
+    val isRegisterSuccessful: Boolean = false,
+    val needsProfileCompletion: Boolean = false, // true = new Google user, must pick role/category
+    val isProfileCompletionSuccessful: Boolean = false
 )
 
 class AuthViewModel(
@@ -39,22 +41,6 @@ class AuthViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         errorMessage = exception.localizedMessage ?: "Login failed. Please try again."
-                    )
-                }
-        }
-    }
-
-    fun loginWithGoogle(idToken: String) {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-            repository.loginWithGoogle(idToken)
-                .onSuccess {
-                    _uiState.value = _uiState.value.copy(isLoading = false, isLoginSuccessful = true)
-                }
-                .onFailure { exception ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        errorMessage = exception.localizedMessage ?: "Google Sign-In failed. Please try again."
                     )
                 }
         }
@@ -92,7 +78,6 @@ class AuthViewModel(
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-
             repository.register(context, name, email, phoneNumber, password, roles, serviceCategories, certificateUri)
                 .onSuccess {
                     _uiState.value = _uiState.value.copy(isLoading = false, isRegisterSuccessful = true)
@@ -101,6 +86,63 @@ class AuthViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         errorMessage = exception.localizedMessage ?: "Registration failed. Please try again."
+                    )
+                }
+        }
+    }
+
+    /** Called after Google's own sign-in UI returns an ID token. */
+    fun signInWithGoogle(idToken: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+
+            repository.signInWithGoogle(idToken)
+                .onSuccess { isNewUser ->
+                    _uiState.value = if (isNewUser) {
+                        _uiState.value.copy(isLoading = false, needsProfileCompletion = true)
+                    } else {
+                        _uiState.value.copy(isLoading = false, isLoginSuccessful = true)
+                    }
+                }
+                .onFailure { exception ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = exception.localizedMessage ?: "Google sign-in failed"
+                    )
+                }
+        }
+    }
+
+    /** Called from the Complete Profile screen for a first-time Google user. */
+    fun completeGoogleProfile(
+        context: Context,
+        phoneNumber: String,
+        roles: List<String>,
+        serviceCategories: List<String>,
+        certificateUri: Uri?
+    ) {
+        if (phoneNumber.isBlank()) {
+            _uiState.value = _uiState.value.copy(errorMessage = "Please enter your phone number")
+            return
+        }
+        if (roles.contains("provider") && serviceCategories.isEmpty()) {
+            _uiState.value = _uiState.value.copy(errorMessage = "Select at least one service category")
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+            repository.completeGoogleProfile(context, phoneNumber, roles, serviceCategories, certificateUri)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        isProfileCompletionSuccessful = true
+                    )
+                }
+                .onFailure { exception ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = exception.localizedMessage ?: "Could not save profile"
                     )
                 }
         }

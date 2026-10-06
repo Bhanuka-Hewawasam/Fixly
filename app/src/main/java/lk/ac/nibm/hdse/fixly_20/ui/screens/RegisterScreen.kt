@@ -16,6 +16,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import lk.ac.nibm.hdse.fixly_20.model.AccountType
 import lk.ac.nibm.hdse.fixly_20.viewmodel.AuthViewModel
 
 private val serviceCategoryOptions = listOf("Plumbing", "Electrical", "Cleaning", "Other")
@@ -28,7 +29,6 @@ fun RegisterScreen(
 ) {
     val context = LocalContext.current
 
-    // --- Step control: 1 = account details, 2 = role + category ---
     var currentStep by remember { mutableIntStateOf(1) }
 
     var name by remember { mutableStateOf("") }
@@ -38,8 +38,8 @@ fun RegisterScreen(
     var confirmPassword by remember { mutableStateOf("") }
     var step1Error by remember { mutableStateOf<String?>(null) }
 
-    var isCustomer by remember { mutableStateOf(true) }
-    var isProvider by remember { mutableStateOf(false) }
+    // Single choice now — a Provider automatically gets Customer ability too, no extra tick needed
+    var accountType by remember { mutableStateOf(AccountType.CUSTOMER) }
     val selectedCategories = remember { mutableStateMapOf<String, Boolean>() }
     var certificateUri by remember { mutableStateOf<Uri?>(null) }
 
@@ -136,19 +136,42 @@ fun RegisterScreen(
             TextButton(onClick = onNavigateToLogin) { Text("Already have an account? Login") }
 
         } else {
-            // ---------------- STEP 2: Role + category ----------------
-            Text("I want to:", style = MaterialTheme.typography.titleSmall, modifier = Modifier.fillMaxWidth())
+            // ---------------- STEP 2: Account type (single choice) ----------------
+            Text(
+                "I'm signing up as a:",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(4.dp))
 
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Checkbox(checked = isCustomer, onCheckedChange = { isCustomer = it })
-                Text("Book services (Customer)")
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                RadioButton(
+                    selected = accountType == AccountType.CUSTOMER,
+                    onClick = { accountType = AccountType.CUSTOMER }
+                )
+                Text("Customer — I want to book services")
             }
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Checkbox(checked = isProvider, onCheckedChange = { isProvider = it })
-                Text("Offer services (Provider)")
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                RadioButton(
+                    selected = accountType == AccountType.PROVIDER,
+                    onClick = { accountType = AccountType.PROVIDER }
+                )
+                Text("Service Provider — I want to offer services")
             }
 
-            if (isProvider) {
+            if (accountType == AccountType.PROVIDER) {
+                Text(
+                    "As a Provider, you can also book services yourself anytime — " +
+                        "just switch views from your profile later.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     "What services do you offer?",
@@ -204,9 +227,12 @@ fun RegisterScreen(
                 Spacer(modifier = Modifier.width(12.dp))
                 Button(
                     onClick = {
-                        val roles = buildList {
-                            if (isCustomer) add("customer")
-                            if (isProvider) add("provider")
+                        // Provider always gets BOTH roles automatically — no separate tick needed.
+                        // Customer-only signups stay single-role.
+                        val roles = if (accountType == AccountType.PROVIDER) {
+                            listOf("customer", "provider")
+                        } else {
+                            listOf("customer")
                         }
                         val categories = selectedCategories.filter { it.value }.keys.toList()
                         viewModel.register(
