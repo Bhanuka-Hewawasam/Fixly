@@ -66,20 +66,11 @@ class JobRepository(
         }
     }
 
-    /**
-     * Real-time stream of open jobs, filtered to the provider's own service categories.
-     * If providerCategories is empty, all open jobs are shown (fallback, shouldn't normally happen
-     * since registration now requires at least one category for providers).
-     */
     fun observeOpenJobs(providerCategories: List<String>): Flow<List<JobPost>> = callbackFlow {
-        var query: Query = firestore.collection("jobPosts")
-            .whereEqualTo("status", "Open")
-
-        // Firestore whereIn requires a non-empty list (max 10 values)
+        var query: Query = firestore.collection("jobPosts").whereEqualTo("status", "Open")
         if (providerCategories.isNotEmpty() && providerCategories.size <= 10) {
             query = query.whereIn("category", providerCategories)
         }
-
         val listener = query
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
@@ -104,7 +95,6 @@ class JobRepository(
             close()
             return@callbackFlow
         }
-
         val listener = firestore.collection("jobPosts")
             .whereEqualTo("customerId", customerId)
             .addSnapshotListener { snapshot, error ->
@@ -118,5 +108,67 @@ class JobRepository(
                 trySend(sortedJobs)
             }
         awaitClose { listener.remove() }
+    }
+
+    /** Real-time stream of ONE job — used by both the customer's and provider's tracking screens. */
+    fun observeJob(jobId: String): Flow<JobPost?> = callbackFlow {
+        val listener = firestore.collection("jobPosts").document(jobId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    error.printStackTrace()
+                    trySend(null)
+                    return@addSnapshotListener
+                }
+                trySend(snapshot?.toObject(JobPost::class.java))
+            }
+        awaitClose { listener.remove() }
+    }
+
+    /** Jobs assigned to the logged-in PROVIDER that are still active (Assigned or In Progress). */
+    fun observeProviderAssignedJobs(): Flow<List<JobPost>> = callbackFlow {
+        val providerId = firebaseAuth.currentUser?.uid
+        if (providerId == null) {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+
+        val listener = firestore.collection("jobPosts")
+            .whereEqualTo("assignedProviderId", providerId)
+            .whereIn("status", listOf("Assigned", "In Progress"))
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    error.printStackTrace()
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val jobs = snapshot?.toObjects(JobPost::class.java) ?: emptyList()
+                val sortedJobs = jobs.sortedByDescending { it.createdAt }
+                trySend(sortedJobs)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    /** Provider's device calls this periodically while actively sharing location. */
+    suspend fun updateProviderLocation(jobId: String, location: GeoPoint): Result<Unit> {
+        return try {
+            firestore.collection("jobPosts").document(jobId)
+                .update("providerLocation", location)
+                .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateJobStatus(jobId: String, status: String): Result<Unit> {
+        return try {
+            firestore.collection("jobPosts").document(jobId)
+                .update("status", status)
+                .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 }

@@ -4,23 +4,21 @@ import com.google.firebase.firestore.GeoPoint
 import com.google.firebase.firestore.ServerTimestamp
 import java.util.Date
 
-/**
- * Firestore document: jobPosts/{jobId}
- * Bids for this job live in a sub-collection: jobPosts/{jobId}/bids/{bidId}
- */
 data class JobPost(
     val jobId: String = "",
     val customerId: String = "",
     val customerName: String = "",
-    val category: String = "",          // "Plumbing", "Electrical", "Cleaning", "Other"
+    val category: String = "",
     val description: String = "",
-    val preferredDate: String = "",      // simple text for now, e.g. "2026-10-12"
-    val preferredTime: String = "",      // e.g. "10:00 AM"
-    val isEmergency: Boolean = false,    // sir's requirement — urgent jobs flagged for faster matching
-    val location: GeoPoint? = null,
+    val preferredDate: String = "",
+    val preferredTime: String = "",
+    val isEmergency: Boolean = false,
+    val location: GeoPoint? = null,       // customer's job address location
     val address: String = "",
-    val status: String = "Open",         // Open -> Assigned -> In Progress -> Completed
+    val status: String = "Open",          // Open -> Assigned -> In Progress -> Completed
     val selectedBidId: String? = null,
-    val imageUrls: List<String> = emptyList(), // Added for multiple problem photo uploads
+    val assignedProviderId: String? = null, // set when a bid is selected — who's doing this job
+    val providerLocation: GeoPoint? = null, // live GPS location, updated while job is Assigned/In Progress
+    val imageUrls: List<String> = emptyList(),
     @ServerTimestamp val createdAt: Date? = null
 )

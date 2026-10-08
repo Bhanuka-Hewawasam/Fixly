@@ -3,7 +3,6 @@ package lk.ac.nibm.hdse.fixly_20.navigation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -17,13 +16,16 @@ import androidx.navigation.navArgument
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
+import lk.ac.nibm.hdse.fixly_20.ui.screens.AcceptedJobsScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.AvailableJobsScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.CompleteProfileScreen
+import lk.ac.nibm.hdse.fixly_20.ui.screens.CustomerTrackingScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.HomeScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.JobBidsScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.LoginScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.MyBookingsScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.PostJobScreen
+import lk.ac.nibm.hdse.fixly_20.ui.screens.ProviderTrackingScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.RegisterScreen
 
 object Routes {
@@ -35,17 +37,19 @@ object Routes {
     const val POST_JOB = "post_job"
     const val MY_BOOKINGS = "my_bookings"
     const val AVAILABLE_JOBS = "available_jobs"
-    const val ACCEPTED_JOBS = "accepted_jobs"      // TODO: next step
+    const val ACCEPTED_JOBS = "accepted_jobs"
     const val JOB_BIDS = "job_bids/{jobId}"
     fun jobBids(jobId: String) = "job_bids/$jobId"
+    const val PROVIDER_TRACKING = "provider_tracking/{jobId}"
+    fun providerTracking(jobId: String) = "provider_tracking/$jobId"
+    const val CUSTOMER_TRACKING = "customer_tracking/{jobId}"
+    fun customerTracking(jobId: String) = "customer_tracking/$jobId"
 }
 
 @Composable
 fun AppNavigation(navController: NavHostController = rememberNavController()) {
     NavHost(navController = navController, startDestination = Routes.AUTH_GATE) {
 
-        // Decides, once at app start, whether to show Login, Home, or Complete Profile —
-        // this is what makes the session "stay logged in until logout".
         composable(Routes.AUTH_GATE) {
             AuthGate(
                 onGoToLogin = {
@@ -115,7 +119,8 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
         composable(Routes.MY_BOOKINGS) {
             MyBookingsScreen(
                 onBack = { navController.popBackStack() },
-                onOpenJobBids = { jobId -> navController.navigate(Routes.jobBids(jobId)) }
+                onOpenJobBids = { jobId -> navController.navigate(Routes.jobBids(jobId)) },
+                onTrackProvider = { jobId -> navController.navigate(Routes.customerTracking(jobId)) }
             )
         }
 
@@ -131,17 +136,38 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
             )
         }
 
-        // --- Placeholder — built in upcoming step ---
-        composable(Routes.ACCEPTED_JOBS) { Text("Accepted Jobs screen — coming next") }
+        composable(Routes.ACCEPTED_JOBS) {
+            AcceptedJobsScreen(
+                onBack = { navController.popBackStack() },
+                onOpenJob = { jobId -> navController.navigate(Routes.providerTracking(jobId)) }
+            )
+        }
+
+        composable(
+            route = Routes.PROVIDER_TRACKING,
+            arguments = listOf(navArgument("jobId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val jobId = backStackEntry.arguments?.getString("jobId") ?: ""
+            ProviderTrackingScreen(
+                jobId = jobId,
+                onBack = { navController.popBackStack() },
+                onJobCompleted = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = Routes.CUSTOMER_TRACKING,
+            arguments = listOf(navArgument("jobId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val jobId = backStackEntry.arguments?.getString("jobId") ?: ""
+            CustomerTrackingScreen(
+                jobId = jobId,
+                onBack = { navController.popBackStack() }
+            )
+        }
     }
 }
 
-/**
- * Runs once at app launch: checks if a Firebase session already exists.
- * - No session -> Login
- * - Session exists but no Firestore profile yet (e.g. Google sign-in interrupted) -> Complete Profile
- * - Session exists and profile exists -> Home
- */
 @Composable
 private fun AuthGate(
     onGoToLogin: () -> Unit,
@@ -154,13 +180,7 @@ private fun AuthGate(
             onGoToLogin()
             return@LaunchedEffect
         }
-
-        val doc = FirebaseFirestore.getInstance()
-            .collection("users")
-            .document(currentUser.uid)
-            .get()
-            .await()
-
+        val doc = FirebaseFirestore.getInstance().collection("users").document(currentUser.uid).get().await()
         if (doc.exists()) onGoToHome() else onGoToCompleteProfile()
     }
 

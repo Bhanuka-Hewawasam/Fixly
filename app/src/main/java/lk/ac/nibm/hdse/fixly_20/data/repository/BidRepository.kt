@@ -24,20 +24,11 @@ class BidRepository(
             val providerId = firebaseAuth.currentUser?.uid
                 ?: return Result.failure(IllegalStateException("No logged-in user"))
 
-            val bidRef = firestore.collection("jobPosts")
-                .document(jobId)
-                .collection("bids")
-                .document()
-
+            val bidRef = firestore.collection("jobPosts").document(jobId).collection("bids").document()
             val bid = Bid(
-                bidId = bidRef.id,
-                jobId = jobId,
-                providerId = providerId,
-                providerName = providerName,
-                price = price,
-                message = message
+                bidId = bidRef.id, jobId = jobId, providerId = providerId,
+                providerName = providerName, price = price, message = message
             )
-
             bidRef.set(bid).await()
             Result.success(Unit)
         } catch (e: Exception) {
@@ -45,33 +36,36 @@ class BidRepository(
         }
     }
 
-    /** Real-time stream of bids placed on a specific job, newest first. */
     fun observeBidsForJob(jobId: String): Flow<List<Bid>> = callbackFlow {
-        val listener = firestore.collection("jobPosts")
-            .document(jobId)
-            .collection("bids")
+        val listener = firestore.collection("jobPosts").document(jobId).collection("bids")
+            .orderBy("createdAt", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    error.printStackTrace()
-                    trySend(emptyList())
-                    return@addSnapshotListener
-                }
-                val bids = snapshot?.toObjects(Bid::class.java) ?: emptyList()
-                val sortedBids = bids.sortedByDescending { it.createdAt }
-                trySend(sortedBids)
+                if (error != null) { close(error); return@addSnapshotListener }
+                trySend(snapshot?.toObjects(Bid::class.java) ?: emptyList())
             }
         awaitClose { listener.remove() }
     }
 
     /**
-     * Customer selects a bid: marks the job "Assigned" and records which bid won.
-     * Selection is always manual — this just finalises the customer's own choice.
+     * Customer selects a bid: looks up that bid's providerId, then marks the job
+     * "Assigned" with both the selected bid and the assigned provider recorded.
      */
     suspend fun selectBid(jobId: String, bidId: String): Result<Unit> {
         return try {
+            val bidSnapshot = firestore.collection("jobPosts").document(jobId)
+                .collection("bids").document(bidId).get().await()
+            val bid = bidSnapshot.toObject(Bid::class.java)
+                ?: return Result.failure(IllegalStateException("Bid not found"))
+
             firestore.collection("jobPosts").document(jobId)
-                .update(mapOf("selectedBidId" to bidId, "status" to "Assigned"))
-                .await()
+                .update(
+                    mapOf(
+                        "selectedBidId" to bidId,
+                        "assignedProviderId" to bid.providerId,
+                        "status" to "Assigned"
+                    )
+                ).await()
+
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
