@@ -1,8 +1,11 @@
 package lk.ac.nibm.hdse.fixly_20.data.repository
 
+import android.content.Context
+import android.net.Uri
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
+import lk.ac.nibm.hdse.fixly_20.data.remote.CloudinaryUploader
 import lk.ac.nibm.hdse.fixly_20.model.User
 
 /**
@@ -24,6 +27,23 @@ class UserRepository(
                 ?: return Result.failure(IllegalStateException("User profile not found"))
 
             Result.success(user)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateProfilePicture(context: Context, imageUri: Uri): Result<String> {
+        return try {
+            val uid = firebaseAuth.currentUser?.uid
+                ?: return Result.failure(IllegalStateException("No logged-in user"))
+
+            val uploadResult = CloudinaryUploader.uploadFile(context, imageUri)
+            val imageUrl = uploadResult.getOrThrow()
+
+            firestore.collection("users").document(uid)
+                .update("profilePictureUrl", imageUrl).await()
+
+            Result.success(imageUrl)
         } catch (e: Exception) {
             Result.failure(e)
         }

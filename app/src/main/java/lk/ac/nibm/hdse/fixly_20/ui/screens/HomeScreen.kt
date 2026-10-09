@@ -1,5 +1,9 @@
 package lk.ac.nibm.hdse.fixly_20.ui.screens
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -9,22 +13,30 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.SubcomposeAsyncImage
 import lk.ac.nibm.hdse.fixly_20.ui.components.CategoryCard
 import lk.ac.nibm.hdse.fixly_20.ui.components.EmergencyChip
 import lk.ac.nibm.hdse.fixly_20.ui.components.FixlyBottomNavBar
 import lk.ac.nibm.hdse.fixly_20.ui.components.FixlyPrimaryButton
 import lk.ac.nibm.hdse.fixly_20.ui.components.FixlyTopBar
+import lk.ac.nibm.hdse.fixly_20.ui.components.MechanicIllustrationPanel
 import lk.ac.nibm.hdse.fixly_20.ui.components.VerifiedBadge
+import lk.ac.nibm.hdse.fixly_20.ui.theme.ThemeState
 import lk.ac.nibm.hdse.fixly_20.viewmodel.HomeViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,17 +49,27 @@ fun HomeScreen(
     onViewAcceptedJobs: () -> Unit,
     viewModel: HomeViewModel = viewModel()
 ) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
+    val isDarkMode by ThemeState.isDarkMode.collectAsState()
+
+    var showProfileSheet by remember { mutableStateOf(false) }
+
+    val profilePhotoPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.uploadProfilePicture(context, uri)
+        }
+    }
 
     Scaffold(
         topBar = {
             FixlyTopBar(
                 title = "Fixly",
-                subtitle = if (uiState.user != null) "Welcome back, ${uiState.user?.name}" else null,
-                onLogoutClick = {
-                    viewModel.logout()
-                    onLogout()
-                }
+                userName = uiState.user?.name,
+                profilePictureUrl = uiState.user?.profilePictureUrl,
+                onAvatarClick = { showProfileSheet = true }
             )
         },
         bottomBar = {
@@ -74,7 +96,10 @@ fun HomeScreen(
                         .padding(padding),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    CircularProgressIndicator(
+                        color = MaterialTheme.colorScheme.primary,
+                        strokeWidth = 3.dp
+                    )
                 }
             }
 
@@ -86,19 +111,28 @@ fun HomeScreen(
                         .padding(24.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            imageVector = Icons.Default.ErrorOutline,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(48.dp)
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = uiState.errorMessage ?: "Failed to load dashboard",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.error
-                        )
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.ErrorOutline,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = uiState.errorMessage ?: "Failed to load dashboard",
+                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
                     }
                 }
             }
@@ -113,76 +147,13 @@ fun HomeScreen(
                         .fillMaxSize()
                         .padding(padding)
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 20.dp, vertical = 12.dp)
+                        .padding(horizontal = 20.dp, vertical = 16.dp)
                 ) {
-                    // --- User Welcome Banner ---
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(16.dp)
-                        ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary)
-                            ) {
-                                Text(
-                                    text = (user?.name?.firstOrNull() ?: 'U').toString().uppercase(),
-                                    style = MaterialTheme.typography.titleLarge.copy(
-                                        color = MaterialTheme.colorScheme.onPrimary,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(14.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Hello, ${user?.name ?: "User"}! 👋",
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
-                                )
-                                Text(
-                                    text = if (uiState.activeRole == "customer") "Customer Account" else "Service Provider Account",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                                )
-                            }
-                            if (user?.roles?.contains("provider") == true) {
-                                if (user.isVerified) {
-                                    VerifiedBadge()
-                                } else {
-                                    AssistChip(
-                                        onClick = {},
-                                        label = {
-                                            Text(
-                                                "Pending Verification",
-                                                style = MaterialTheme.typography.labelSmall
-                                            )
-                                        },
-                                        colors = AssistChipDefaults.assistChipColors(
-                                            containerColor = MaterialTheme.colorScheme.surface
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // --- Segmented Role Switcher (Visible when user holds both roles) ---
+                    // SEGMENTED ROLE SWITCHER (When user holds both customer & provider roles)
                     if (hasBothRoles) {
                         Surface(
                             shape = RoundedCornerShape(16.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
@@ -190,24 +161,24 @@ fun HomeScreen(
                             ) {
                                 SegmentedRoleTab(
                                     title = "I need services (Customer)",
-                                    icon = Icons.Default.Person,
+                                    icon = Icons.Outlined.Person,
                                     isSelected = uiState.activeRole == "customer",
                                     onClick = { viewModel.switchRole("customer") },
                                     modifier = Modifier.weight(1f)
                                 )
                                 SegmentedRoleTab(
                                     title = "I offer services (Provider)",
-                                    icon = Icons.Default.Handyman,
+                                    icon = Icons.Outlined.Build,
                                     isSelected = uiState.activeRole == "provider",
                                     onClick = { viewModel.switchRole("provider") },
                                     modifier = Modifier.weight(1f)
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.height(20.dp))
+                        Spacer(modifier = Modifier.height(18.dp))
                     }
 
-                    // --- Content View according to active role ---
+                    // DASHBOARD CONTENT BASED ON ACTIVE ROLE
                     if (uiState.activeRole == "customer") {
                         CustomerDashboardView(
                             onPostJob = onPostJob,
@@ -218,6 +189,190 @@ fun HomeScreen(
                             isVerified = user?.isVerified ?: false,
                             onViewAvailableJobs = onViewAvailableJobs,
                             onViewAcceptedJobs = onViewAcceptedJobs
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+                }
+            }
+        }
+
+        // PROFILE MENU BOTTOM SHEET
+        if (showProfileSheet && uiState.user != null) {
+            val user = uiState.user!!
+            val initial = (user.name.firstOrNull() ?: 'S').uppercaseChar()
+
+            ModalBottomSheet(
+                onDismissRequest = { showProfileSheet = false },
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Profile Avatar with Photo Edit Badge
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(76.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary)
+                            .clickable { profilePhotoPicker.launch("image/*") }
+                    ) {
+                        if (!user.profilePictureUrl.isNullOrBlank()) {
+                            SubcomposeAsyncImage(
+                                model = user.profilePictureUrl,
+                                contentDescription = "Profile Photo",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Text(
+                                text = initial.toString(),
+                                style = MaterialTheme.typography.headlineLarge.copy(
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                        }
+
+                        // Camera Icon Badge
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surface),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.PhotoCamera,
+                                contentDescription = "Change Photo",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    TextButton(
+                        onClick = { profilePhotoPicker.launch("image/*") },
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.PhotoCamera,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (user.profilePictureUrl.isNullOrBlank()) "Add Photo" else "Change Photo",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // User Name & Info
+                    Text(
+                        text = user.name.ifBlank { "User" },
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp
+                        )
+                    )
+                    Text(
+                        text = user.email,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = if (uiState.activeRole == "customer") "Customer Account" else "Service Provider Account",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            ),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Dark Mode Toggle Row
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Outlined.DarkMode,
+                                contentDescription = "Dark Mode",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Text(
+                                text = "Dark mode",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 15.sp
+                                )
+                            )
+                        }
+
+                        Switch(
+                            checked = isDarkMode,
+                            onCheckedChange = { ThemeState.setDarkMode(context, it) }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Log Out Row
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable {
+                                showProfileSheet = false
+                                viewModel.logout()
+                                onLogout()
+                            }
+                            .padding(vertical = 12.dp, horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                            contentDescription = "Log out",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Text(
+                            text = "Log out",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = MaterialTheme.colorScheme.error
+                            )
                         )
                     }
 
@@ -259,6 +414,7 @@ private fun SegmentedRoleTab(
                 text = title,
                 style = MaterialTheme.typography.labelMedium.copy(
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                    fontSize = 12.sp,
                     color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             )
@@ -272,7 +428,7 @@ private fun CustomerDashboardView(
     onViewBookings: () -> Unit
 ) {
     Column {
-        // --- Primary Hero Card: "What do you need fixed?" ---
+        // --- COMPACT HERO CARD: "What do you need fixed?" ---
         ElevatedCard(
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.elevatedCardColors(
@@ -281,50 +437,114 @@ private fun CustomerDashboardView(
             elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.HomeRepairService,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(28.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.fillMaxWidth()) {
+                // Modern Decorative Banner Panel
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                    shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                            shape = RoundedCornerShape(10.dp),
+                            shadowElevation = 1.dp
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.HomeRepairService,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "On-Demand Service",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.5.sp,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Compact Card Text & Action Button
+                Column(modifier = Modifier.padding(18.dp)) {
                     Text(
                         text = "What do you need fixed?",
                         style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 19.sp,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = "Post a job and get offers from verified professionals.",
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = 13.5.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    FixlyPrimaryButton(
+                        text = "Post a Job Now",
+                        icon = Icons.Outlined.AddCircle,
+                        onClick = onPostJob
+                    )
                 }
+            }
+        }
 
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Post your repair request and receive bids from verified local service professionals.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // --- POPULAR SERVICE CATEGORIES ---
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Popular Service Categories",
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                FixlyPrimaryButton(
-                    text = "Post a Job Now",
-                    icon = Icons.Default.AddCircleOutline,
-                    onClick = onPostJob
+            )
+            TextButton(
+                onClick = onPostJob,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = "See All",
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.5.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // --- Category Shortcuts ---
-        Text(
-            text = "Popular Service Categories",
-            style = MaterialTheme.typography.titleMedium.copy(
-                fontWeight = FontWeight.Bold
-            )
-        )
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         val categories = listOf("Plumbing", "Electrical", "Cleaning", "Other")
         Row(
@@ -341,14 +561,14 @@ private fun CustomerDashboardView(
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
-        // --- Bookings Action Card ---
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-            ),
+        // --- MY BOOKINGS & BIDS ACTION CARD ---
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
+            shadowElevation = 1.dp,
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(
@@ -356,9 +576,12 @@ private fun CustomerDashboardView(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier
                     .clickable(onClick = onViewBookings)
-                    .padding(20.dp)
+                    .padding(16.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
@@ -370,7 +593,7 @@ private fun CustomerDashboardView(
                             imageVector = Icons.Default.History,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(14.dp))
@@ -378,23 +601,45 @@ private fun CustomerDashboardView(
                         Text(
                             text = "My Bookings & Bids",
                             style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         )
+                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "Track request status and review provider bids",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = "Track requests and review provider bids",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontSize = 12.5.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         )
                     }
                 }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                    contentDescription = "View Bookings",
-                    tint = MaterialTheme.colorScheme.primary
-                )
+
+                Spacer(modifier = Modifier.width(10.dp))
+
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "View Bookings",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // --- FRIENDLY MECHANIC ILLUSTRATION PANEL ---
+        MechanicIllustrationPanel()
     }
 }
 
@@ -405,13 +650,12 @@ private fun ProviderDashboardView(
     onViewAcceptedJobs: () -> Unit
 ) {
     Column {
-        // --- Verification Alert (if unverified) ---
+        // VERIFICATION ALERT (IF UNVERIFIED)
         if (!isVerified) {
-            Card(
+            Surface(
                 shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
-                ),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primaryContainer),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -419,29 +663,35 @@ private fun ProviderDashboardView(
                     modifier = Modifier.padding(16.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Info,
+                        imageVector = Icons.Outlined.Info,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(26.dp)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
                             text = "Verification Pending",
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.5.sp
+                            )
                         )
+                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = "Your certificate is under review. You can still browse jobs and submit bids.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         )
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(18.dp))
         }
 
-        // --- Available Jobs Primary Card ---
+        // AVAILABLE JOBS HERO CARD
         ElevatedCard(
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.elevatedCardColors(
@@ -458,16 +708,17 @@ private fun ProviderDashboardView(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = Icons.Default.WorkOutline,
+                            imageVector = Icons.Outlined.WorkOutline,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(26.dp)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
                             text = "Browse Open Jobs",
                             style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 19.sp
                             )
                         )
                     }
@@ -477,28 +728,29 @@ private fun ProviderDashboardView(
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = "Find home repair requests nearby, view job details, and place your price bids.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = 13.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 )
 
                 Spacer(modifier = Modifier.height(18.dp))
 
                 FixlyPrimaryButton(
                     text = "Browse Available Jobs",
-                    icon = Icons.Default.Search,
+                    icon = Icons.Outlined.Search,
                     onClick = onViewAvailableJobs
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(18.dp))
 
-        // --- Accepted Jobs Card ---
-        Card(
+        // ACCEPTED JOBS CARD
+        Surface(
             shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-            ),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(
@@ -506,18 +758,21 @@ private fun ProviderDashboardView(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier
                     .clickable(onClick = onViewAcceptedJobs)
-                    .padding(20.dp)
+                    .padding(18.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(46.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.primaryContainer)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.TaskAlt,
+                            imageVector = Icons.Outlined.TaskAlt,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(24.dp)
@@ -528,21 +783,38 @@ private fun ProviderDashboardView(
                         Text(
                             text = "My Accepted Jobs",
                             style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         )
+                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = "View jobs where your bid was selected",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontSize = 12.5.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         )
                     }
                 }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                    contentDescription = "View Accepted Jobs",
-                    tint = MaterialTheme.colorScheme.primary
-                )
+
+                Spacer(modifier = Modifier.width(10.dp))
+
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "View Accepted Jobs",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
     }

@@ -2,23 +2,49 @@ package lk.ac.nibm.hdse.fixly_20.ui.screens
 
 import android.app.Activity
 import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
+import lk.ac.nibm.hdse.fixly_20.ui.components.FixlyLogo
+import lk.ac.nibm.hdse.fixly_20.ui.components.GoogleIcon
+import lk.ac.nibm.hdse.fixly_20.ui.components.LogoSize
 import lk.ac.nibm.hdse.fixly_20.viewmodel.AuthViewModel
 
 @Composable
@@ -29,9 +55,11 @@ fun LoginScreen(
     viewModel: AuthViewModel = viewModel()
 ) {
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
 
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
 
     val uiState by viewModel.uiState.collectAsState()
 
@@ -80,80 +108,296 @@ fun LoginScreen(
         if (uiState.needsProfileCompletion) onNeedsProfileCompletion()
     }
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
     ) {
-        Text(text = "Fixly", style = MaterialTheme.typography.headlineLarge)
-        Text(text = "Home repair services, on demand", style = MaterialTheme.typography.bodyMedium)
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        OutlinedTextField(
-            value = email, onValueChange = { email = it },
-            label = { Text("Email") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            singleLine = true, modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-
-        OutlinedTextField(
-            value = password, onValueChange = { password = it },
-            label = { Text("Password") },
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            singleLine = true, modifier = Modifier.fillMaxWidth()
-        )
-
-        uiState.errorMessage?.let { message ->
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-        }
-
-        googleError?.let { error ->
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Button(
-            onClick = { viewModel.login(email, password) },
-            enabled = !uiState.isLoading,
-            modifier = Modifier.fillMaxWidth()
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .imePadding()
+                .padding(horizontal = 24.dp, vertical = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            if (uiState.isLoading) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-            } else {
-                Text("Login")
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 1. BRAND HEADER WITH LOGO
+            FixlyLogo(
+                size = LogoSize.LARGE,
+                showTagline = false
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Home repair services, on demand",
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(36.dp))
+
+            // 2. INPUT FIELDS
+            OutlinedTextField(
+                value = email,
+                onValueChange = {
+                    email = it
+                    if (uiState.errorMessage != null) viewModel.clearError()
+                },
+                label = { Text("Email Address") },
+                placeholder = { Text("name@example.com") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Outlined.Email,
+                        contentDescription = "Email Icon",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Email,
+                    imeAction = ImeAction.Next
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                ),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = password,
+                onValueChange = {
+                    password = it
+                    if (uiState.errorMessage != null) viewModel.clearError()
+                },
+                label = { Text("Password") },
+                placeholder = { Text("Enter your password") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Outlined.Lock,
+                        contentDescription = "Lock Icon",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                trailingIcon = {
+                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                        Icon(
+                            imageVector = if (passwordVisible) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
+                            contentDescription = if (passwordVisible) "Hide password" else "Show password",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(
+                    onDone = {
+                        focusManager.clearFocus()
+                        viewModel.login(email, password)
+                    }
+                ),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            // 3. ERROR MESSAGES IN A STYLISH CARD
+            val activeError = uiState.errorMessage ?: googleError
+            AnimatedVisibility(
+                visible = activeError != null,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                activeError?.let { errorText ->
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.ErrorOutline,
+                                contentDescription = "Error",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = errorText,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium)
+                            )
+                        }
+                    }
+                }
             }
-        }
 
-        Spacer(modifier = Modifier.height(16.dp))
-        Text("OR", style = MaterialTheme.typography.bodySmall)
-        Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(28.dp))
 
-        OutlinedButton(
-            onClick = {
-                try {
-                    googleSignInClient.signOut().addOnCompleteListener {
+            // 4. PRIMARY LOGIN BUTTON
+            Button(
+                onClick = {
+                    focusManager.clearFocus()
+                    viewModel.login(email, password)
+                },
+                enabled = !uiState.isLoading,
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = Color.White,
+                    disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                ),
+                contentPadding = PaddingValues(vertical = 14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .shadow(elevation = 2.dp, shape = RoundedCornerShape(14.dp))
+            ) {
+                if (uiState.isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        color = Color.White,
+                        strokeWidth = 2.5.dp
+                    )
+                } else {
+                    Text(
+                        text = "Login",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // 5. "OR" DIVIDER
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                HorizontalDivider(
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                )
+                Text(
+                    text = "OR",
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    ),
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+                HorizontalDivider(
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // 6. GOOGLE SIGN-IN BUTTON WITH GOOGLE LOGO
+            OutlinedButton(
+                onClick = {
+                    try {
+                        googleSignInClient.signOut().addOnCompleteListener {
+                            googleLauncher.launch(googleSignInClient.signInIntent)
+                        }
+                    } catch (e: Exception) {
                         googleLauncher.launch(googleSignInClient.signInIntent)
                     }
-                } catch (e: Exception) {
-                    googleLauncher.launch(googleSignInClient.signInIntent)
+                },
+                enabled = !uiState.isLoading,
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.onSurface
+                ),
+                border = androidx.compose.foundation.BorderStroke(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
+                ),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+            ) {
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Start
+                    ) {
+                        GoogleIcon(size = 22.dp)
+                    }
+                    Text(
+                        text = "Sign in with Google",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    )
                 }
-            },
-            enabled = !uiState.isLoading,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Sign in with Google")
-        }
+            }
 
-        Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
-        TextButton(onClick = onNavigateToRegister) {
-            Text("Don't have an account? Register")
+            // 7. REGISTER FOOTER LINK
+            Row(
+                modifier = Modifier
+                    .clickable { onNavigateToRegister() }
+                    .padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "Don't have an account? ",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                )
+                Text(
+                    text = "Register",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }

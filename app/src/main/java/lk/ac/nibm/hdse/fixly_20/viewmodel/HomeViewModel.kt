@@ -1,5 +1,7 @@
 package lk.ac.nibm.hdse.fixly_20.viewmodel
 
+import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -47,6 +49,26 @@ class HomeViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         errorMessage = exception.localizedMessage ?: "Could not load profile"
+                    )
+                }
+        }
+    }
+
+    fun uploadProfilePicture(context: Context, imageUri: Uri) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true)
+            userRepository.updateProfilePicture(context, imageUri)
+                .onSuccess { newUrl ->
+                    val updatedUser = _uiState.value.user?.copy(profilePictureUrl = newUrl)
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        user = updatedUser
+                    )
+                }
+                .onFailure { exception ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = exception.localizedMessage ?: "Could not upload profile photo"
                     )
                 }
         }

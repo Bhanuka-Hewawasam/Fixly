@@ -10,5 +10,6 @@ data class User(
     val roles: List<String> = listOf("customer"),
     val serviceCategories: List<String> = emptyList(),
     val certificateUrl: String? = null,
+    val profilePictureUrl: String? = null,
     val isVerified: Boolean = false
 )
