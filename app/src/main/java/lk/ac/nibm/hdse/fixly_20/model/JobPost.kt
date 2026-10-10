@@ -13,12 +13,14 @@ data class JobPost(
     val preferredDate: String = "",
     val preferredTime: String = "",
     val isEmergency: Boolean = false,
-    val location: GeoPoint? = null,       // customer's job address location
+    val location: GeoPoint? = null,
     val address: String = "",
-    val status: String = "Open",          // Open -> Assigned -> In Progress -> Completed
+    val status: String = "Open",            // Open -> Assigned -> In Progress -> Completed
     val selectedBidId: String? = null,
-    val assignedProviderId: String? = null, // set when a bid is selected — who's doing this job
-    val providerLocation: GeoPoint? = null, // live GPS location, updated while job is Assigned/In Progress
+    val assignedProviderId: String? = null,
+    val providerLocation: GeoPoint? = null,
+    val beforePhotoUrl: String? = null,     // optional — provider's photo before starting work
+    val afterPhotoUrl: String? = null,      // required to mark the job Completed
     val imageUrls: List<String> = emptyList(),
     @ServerTimestamp val createdAt: Date? = null
 )

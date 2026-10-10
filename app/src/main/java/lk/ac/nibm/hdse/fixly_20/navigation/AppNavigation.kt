@@ -89,6 +89,10 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
             CompleteProfileScreen(
                 onProfileCompleted = {
                     navController.navigate(Routes.HOME) { popUpTo(Routes.COMPLETE_PROFILE) { inclusive = true } }
+                },
+                onBack = {
+                    FirebaseAuth.getInstance().signOut()
+                    navController.navigate(Routes.LOGIN) { popUpTo(Routes.COMPLETE_PROFILE) { inclusive = true } }
                 }
             )
         }

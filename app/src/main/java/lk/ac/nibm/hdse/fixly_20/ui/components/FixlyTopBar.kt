@@ -16,7 +16,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImagePainter
 import coil.compose.SubcomposeAsyncImage
+import coil.compose.SubcomposeAsyncImageContent
 import lk.ac.nibm.hdse.fixly_20.R
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -82,8 +84,10 @@ fun FixlyTopBar(
                             model = profilePictureUrl,
                             contentDescription = "Profile Photo",
                             contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                            error = {
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            val state = painter.state
+                            if (state is AsyncImagePainter.State.Error) {
                                 Text(
                                     text = initial.toString(),
                                     style = MaterialTheme.typography.titleMedium.copy(
@@ -92,8 +96,10 @@ fun FixlyTopBar(
                                         fontSize = 17.sp
                                     )
                                 )
+                            } else {
+                                SubcomposeAsyncImageContent()
                             }
-                        )
+                        }
                     } else {
                         Text(
                             text = initial.toString(),

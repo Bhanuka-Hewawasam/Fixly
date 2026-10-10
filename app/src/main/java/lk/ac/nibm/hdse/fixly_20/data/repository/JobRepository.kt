@@ -110,7 +110,6 @@ class JobRepository(
         awaitClose { listener.remove() }
     }
 
-    /** Real-time stream of ONE job — used by both the customer's and provider's tracking screens. */
     fun observeJob(jobId: String): Flow<JobPost?> = callbackFlow {
         val listener = firestore.collection("jobPosts").document(jobId)
             .addSnapshotListener { snapshot, error ->
@@ -124,7 +123,6 @@ class JobRepository(
         awaitClose { listener.remove() }
     }
 
-    /** Jobs assigned to the logged-in PROVIDER that are still active (Assigned or In Progress). */
     fun observeProviderAssignedJobs(): Flow<List<JobPost>> = callbackFlow {
         val providerId = firebaseAuth.currentUser?.uid
         if (providerId == null) {
@@ -149,7 +147,6 @@ class JobRepository(
         awaitClose { listener.remove() }
     }
 
-    /** Provider's device calls this periodically while actively sharing location. */
     suspend fun updateProviderLocation(jobId: String, location: GeoPoint): Result<Unit> {
         return try {
             firestore.collection("jobPosts").document(jobId)
@@ -166,6 +163,28 @@ class JobRepository(
             firestore.collection("jobPosts").document(jobId)
                 .update("status", status)
                 .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Uploads a work-evidence photo to Cloudinary, then saves the returned URL on the job
+     * document. type is "before" or "after".
+     */
+    suspend fun uploadEvidencePhoto(
+        context: Context,
+        jobId: String,
+        type: String,
+        photoUri: Uri
+    ): Result<Unit> {
+        return try {
+            val url = CloudinaryUploader.uploadFile(context, photoUri).getOrThrow()
+            val field = if (type == "before") "beforePhotoUrl" else "afterPhotoUrl"
+
+            firestore.collection("jobPosts").document(jobId)
+                .update(field, url).await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
