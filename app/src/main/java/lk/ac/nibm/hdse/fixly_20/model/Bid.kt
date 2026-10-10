@@ -5,6 +5,8 @@ import java.util.Date
 
 /**
  * Firestore document: jobPosts/{jobId}/bids/{bidId}
+ * providerRating / providerReviewCount are a snapshot of the provider's reputation
+ * at the moment they placed the bid.
  */
 data class Bid(
     val bidId: String = "",
@@ -13,6 +15,7 @@ data class Bid(
     val providerName: String = "",
     val price: Double = 0.0,
     val message: String = "",
-    val providerRating: Double = 0.0, // placeholder until ratings/reviews feature exists
+    val providerRating: Double = 0.0,
+    val providerReviewCount: Int = 0,
     @ServerTimestamp val createdAt: Date? = null
 )

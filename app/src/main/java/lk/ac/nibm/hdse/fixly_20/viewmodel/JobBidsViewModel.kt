@@ -38,9 +38,9 @@ class JobBidsViewModel(
     }
 
     /**
-     * Simple weighted score: lower price is better, higher provider rating is better.
-     * Price carries more weight (60%) since it's the most consistently available signal
-     * right now; rating weight (40%) grows in importance once reviews are implemented.
+     * Weighted score: lower price is better (60%), higher provider rating is better (40%).
+     * A provider with NO reviews yet gets a neutral rating score (0.5 = 2.5 stars) so a
+     * brand-new provider isn't ranked below someone who has a 1-star record.
      * This only produces a suggestion — the customer always makes the final pick.
      */
     private fun computeRecommended(bids: List<Bid>): String? {
@@ -51,9 +51,9 @@ class JobBidsViewModel(
         val priceRange = (maxPrice - minPrice).takeIf { it > 0 } ?: 1.0
 
         return bids.maxByOrNull { bid ->
-            val normalizedPriceScore = 1.0 - ((bid.price - minPrice) / priceRange) // lower price = higher score
-            val ratingScore = bid.providerRating / 5.0
-            (normalizedPriceScore * 0.6) + (ratingScore * 0.4)
+            val priceScore = 1.0 - ((bid.price - minPrice) / priceRange) // lower price = higher score
+            val ratingScore = if (bid.providerReviewCount == 0) 0.5 else bid.providerRating / 5.0
+            (priceScore * 0.6) + (ratingScore * 0.4)
         }?.bidId
     }
 

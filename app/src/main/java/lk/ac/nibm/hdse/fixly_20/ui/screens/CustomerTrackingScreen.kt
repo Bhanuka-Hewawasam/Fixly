@@ -17,6 +17,7 @@ import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
 import lk.ac.nibm.hdse.fixly_20.model.JobPost
 import lk.ac.nibm.hdse.fixly_20.ui.components.EvidencePhotoCard
+import lk.ac.nibm.hdse.fixly_20.ui.components.StarRatingBar
 import lk.ac.nibm.hdse.fixly_20.viewmodel.CustomerTrackingViewModel
 import lk.ac.nibm.hdse.fixly_20.viewmodel.CustomerTrackingViewModelFactory
 
@@ -44,15 +45,35 @@ fun CustomerTrackingScreen(
                     CircularProgressIndicator()
                 }
             }
-            // Job is done: the map no longer matters, the proof of work does
-            job.status == "Completed" -> CompletedSummary(job = job, paddingValues = padding)
+
+            // Provider says it's done: customer reviews the evidence, then confirms or sends it back
+            job.status == "Completed" -> CompletedContent(
+                job = job,
+                isSubmitting = uiState.isSubmitting,
+                errorMessage = uiState.errorMessage,
+                paddingValues = padding,
+                onConfirm = viewModel::confirmWithReview,
+                onSendBack = viewModel::sendBackToProvider
+            )
+
             else -> LiveTrackingContent(job = job, paddingValues = padding)
         }
     }
 }
 
 @Composable
-private fun CompletedSummary(job: JobPost, paddingValues: PaddingValues) {
+private fun CompletedContent(
+    job: JobPost,
+    isSubmitting: Boolean,
+    errorMessage: String?,
+    paddingValues: PaddingValues,
+    onConfirm: (rating: Int, comment: String) -> Unit,
+    onSendBack: () -> Unit
+) {
+    var rating by remember { mutableIntStateOf(0) }
+    var comment by remember { mutableStateOf("") }
+    var showSendBackDialog by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -61,7 +82,10 @@ private fun CompletedSummary(job: JobPost, paddingValues: PaddingValues) {
             .padding(16.dp)
     ) {
         Text(job.category, style = MaterialTheme.typography.headlineSmall)
-        AssistChip(onClick = {}, label = { Text("✓ Completed") })
+        AssistChip(
+            onClick = {},
+            label = { Text(if (job.customerConfirmed) "✓ Confirmed" else "Awaiting your confirmation") }
+        )
 
         Spacer(modifier = Modifier.height(8.dp))
         Text(job.description, style = MaterialTheme.typography.bodyMedium)
@@ -74,7 +98,87 @@ private fun CompletedSummary(job: JobPost, paddingValues: PaddingValues) {
         Spacer(modifier = Modifier.height(12.dp))
         EvidencePhotoCard(title = "After", photoUrl = job.afterPhotoUrl)
 
+        Spacer(modifier = Modifier.height(24.dp))
+
+        if (job.customerConfirmed) {
+            // ---------- Already reviewed: read-only ----------
+            Text("Your Review", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(4.dp))
+            StarRatingBar(rating = job.rating ?: 0)
+
+            if (!job.reviewComment.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(job.reviewComment, style = MaterialTheme.typography.bodyMedium)
+            }
+        } else {
+            // ---------- Confirm + review form ----------
+            Text("Happy with the work?", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Confirm the job and rate your provider.",
+                style = MaterialTheme.typography.bodySmall
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            StarRatingBar(rating = rating, onRatingChange = { rating = it })
+
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = comment,
+                onValueChange = { comment = it },
+                label = { Text("Write a review (optional)") },
+                minLines = 3,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            errorMessage?.let { message ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = { onConfirm(rating, comment) },
+                enabled = !isSubmitting && rating > 0,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (isSubmitting) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    Text("Confirm & Submit Review")
+                }
+            }
+
+            TextButton(
+                onClick = { showSendBackDialog = true },
+                enabled = !isSubmitting,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Not satisfied? Send back to provider")
+            }
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
+    }
+
+    if (showSendBackDialog) {
+        AlertDialog(
+            onDismissRequest = { showSendBackDialog = false },
+            title = { Text("Send back to provider?") },
+            text = {
+                Text("The provider will be asked to fix the work and upload a new 'after' photo.")
+            },
+            confirmButton = {
+                Button(onClick = {
+                    showSendBackDialog = false
+                    onSendBack()
+                }) {
+                    Text("Send Back")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSendBackDialog = false }) { Text("Cancel") }
+            }
+        )
     }
 }
 

@@ -8,12 +8,17 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import lk.ac.nibm.hdse.fixly_20.model.Bid
+import lk.ac.nibm.hdse.fixly_20.model.User
 
 class BidRepository(
     private val firebaseAuth: FirebaseAuth = FirebaseAuth.getInstance(),
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
 ) {
 
+    /**
+     * Places a bid. The provider's current average rating and review count are copied
+     * into the bid, so the customer sees their reputation right on the bid card.
+     */
     suspend fun submitBid(
         jobId: String,
         providerName: String,
@@ -24,10 +29,19 @@ class BidRepository(
             val providerId = firebaseAuth.currentUser?.uid
                 ?: return Result.failure(IllegalStateException("No logged-in user"))
 
+            val providerProfile = firestore.collection("users").document(providerId)
+                .get().await().toObject(User::class.java)
+
             val bidRef = firestore.collection("jobPosts").document(jobId).collection("bids").document()
             val bid = Bid(
-                bidId = bidRef.id, jobId = jobId, providerId = providerId,
-                providerName = providerName, price = price, message = message
+                bidId = bidRef.id,
+                jobId = jobId,
+                providerId = providerId,
+                providerName = providerName,
+                price = price,
+                message = message,
+                providerRating = providerProfile?.averageRating ?: 0.0,
+                providerReviewCount = providerProfile?.ratingCount ?: 0
             )
             bidRef.set(bid).await()
             Result.success(Unit)
@@ -46,10 +60,6 @@ class BidRepository(
         awaitClose { listener.remove() }
     }
 
-    /**
-     * Customer selects a bid: looks up that bid's providerId, then marks the job
-     * "Assigned" with both the selected bid and the assigned provider recorded.
-     */
     suspend fun selectBid(jobId: String, bidId: String): Result<Unit> {
         return try {
             val bidSnapshot = firestore.collection("jobPosts").document(jobId)
