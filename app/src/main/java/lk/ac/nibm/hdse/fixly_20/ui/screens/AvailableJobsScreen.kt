@@ -24,6 +24,7 @@ import com.google.android.gms.location.Priority
 import com.google.firebase.firestore.GeoPoint
 import lk.ac.nibm.hdse.fixly_20.model.JobPost
 import lk.ac.nibm.hdse.fixly_20.viewmodel.AvailableJobsViewModel
+import lk.ac.nibm.hdse.fixly_20.viewmodel.ProviderAvailabilityViewModel
 
 private val radiusOptionsKm = listOf(10, 25, 50, 100)
 
@@ -32,12 +33,14 @@ private val radiusOptionsKm = listOf(10, 25, 50, 100)
 @Composable
 fun AvailableJobsScreen(
     onBack: () -> Unit,
-    viewModel: AvailableJobsViewModel = viewModel()
+    viewModel: AvailableJobsViewModel = viewModel(),
+    availabilityViewModel: ProviderAvailabilityViewModel = viewModel()
 ) {
     val context = LocalContext.current
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
     val uiState by viewModel.uiState.collectAsState()
+    val availability by availabilityViewModel.uiState.collectAsState()
     var selectedJob by remember { mutableStateOf<JobPost?>(null) }
     var isLocating by remember { mutableStateOf(false) }
     var locationFailed by remember { mutableStateOf(false) }
@@ -78,6 +81,14 @@ fun AvailableJobsScreen(
 
     // Ask for location as soon as the screen opens
     LaunchedEffect(Unit) { requestLocation() }
+
+    // If the emergency switch is ON, keep the position customers can see up to date
+    LaunchedEffect(uiState.providerLocation, availability.isAvailable) {
+        val currentLocation = uiState.providerLocation
+        if (availability.isAvailable && currentLocation != null) {
+            availabilityViewModel.refreshLocation(currentLocation)
+        }
+    }
 
     LaunchedEffect(uiState.bidSubmittedJobId) {
         if (uiState.bidSubmittedJobId != null) {
@@ -128,9 +139,18 @@ fun AvailableJobsScreen(
                 }
             }
 
-            // --- Step C: show radius chips + nearby jobs ---
+            // --- Step C: emergency switch + radius chips + nearby jobs ---
             else -> {
                 Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+                    EmergencyAvailabilityCard(
+                        isAvailable = availability.isAvailable,
+                        isUpdating = availability.isUpdating,
+                        errorMessage = availability.errorMessage,
+                        onToggle = { checked ->
+                            uiState.providerLocation?.let { availabilityViewModel.setAvailable(checked, it) }
+                        }
+                    )
+
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -184,6 +204,50 @@ fun AvailableJobsScreen(
             onDismiss = { selectedJob = null },
             onSubmit = { price, message -> viewModel.submitBid(job.jobId, price, message) }
         )
+    }
+}
+
+@Composable
+private fun EmergencyAvailabilityCard(
+    isAvailable: Boolean,
+    isUpdating: Boolean,
+    errorMessage: String?,
+    onToggle: (Boolean) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "🚨 Available for emergencies",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    Text(
+                        "Customers nearby can find and call you. Your location is shared only while this is ON.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Switch(
+                    checked = isAvailable,
+                    onCheckedChange = onToggle,
+                    enabled = !isUpdating
+                )
+            }
+
+            errorMessage?.let {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
+        }
     }
 }
 

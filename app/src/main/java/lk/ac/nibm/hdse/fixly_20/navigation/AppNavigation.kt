@@ -2,11 +2,16 @@ package lk.ac.nibm.hdse.fixly_20.navigation
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -20,6 +25,7 @@ import lk.ac.nibm.hdse.fixly_20.ui.screens.AcceptedJobsScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.AvailableJobsScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.CompleteProfileScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.CustomerTrackingScreen
+import lk.ac.nibm.hdse.fixly_20.ui.screens.EmergencyScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.HomeScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.JobBidsScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.LoginScreen
@@ -38,6 +44,7 @@ object Routes {
     const val MY_BOOKINGS = "my_bookings"
     const val AVAILABLE_JOBS = "available_jobs"
     const val ACCEPTED_JOBS = "accepted_jobs"
+    const val EMERGENCY = "emergency"
     const val JOB_BIDS = "job_bids/{jobId}"
     fun jobBids(jobId: String) = "job_bids/$jobId"
     const val PROVIDER_TRACKING = "provider_tracking/{jobId}"
@@ -98,14 +105,35 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
         }
 
         composable(Routes.HOME) {
-            HomeScreen(
-                onLogout = {
-                    navController.navigate(Routes.LOGIN) { popUpTo(Routes.HOME) { inclusive = true } }
-                },
-                onPostJob = { navController.navigate(Routes.POST_JOB) },
-                onViewBookings = { navController.navigate(Routes.MY_BOOKINGS) },
-                onViewAvailableJobs = { navController.navigate(Routes.AVAILABLE_JOBS) },
-                onViewAcceptedJobs = { navController.navigate(Routes.ACCEPTED_JOBS) }
+            // The Emergency button floats on top of HomeScreen, so HomeScreen itself needs no changes
+            Box(modifier = Modifier.fillMaxSize()) {
+                HomeScreen(
+                    onLogout = {
+                        navController.navigate(Routes.LOGIN) { popUpTo(Routes.HOME) { inclusive = true } }
+                    },
+                    onPostJob = { navController.navigate(Routes.POST_JOB) },
+                    onViewBookings = { navController.navigate(Routes.MY_BOOKINGS) },
+                    onViewAvailableJobs = { navController.navigate(Routes.AVAILABLE_JOBS) },
+                    onViewAcceptedJobs = { navController.navigate(Routes.ACCEPTED_JOBS) }
+                )
+
+                ExtendedFloatingActionButton(
+                    onClick = { navController.navigate(Routes.EMERGENCY) },
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(16.dp)
+                ) {
+                    Text("🚨 Emergency")
+                }
+            }
+        }
+
+        composable(Routes.EMERGENCY) {
+            EmergencyScreen(
+                onBack = { navController.popBackStack() },
+                onPostUrgentJob = { navController.navigate(Routes.POST_JOB) }
             )
         }
 
