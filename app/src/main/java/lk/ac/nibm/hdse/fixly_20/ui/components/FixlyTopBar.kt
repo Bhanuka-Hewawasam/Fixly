@@ -74,7 +74,11 @@ fun FixlyTopBar(
                         .size(38.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.primary)
-                        .clickable(enabled = onAvatarClick != null) { onAvatarClick?.invoke() },
+                        .clickable(
+                            enabled = onAvatarClick != null,
+                            onClickLabel = "Open profile and account menu",
+                            onClick = { onAvatarClick?.invoke() }
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     if (!profilePictureUrl.isNullOrBlank()) {
