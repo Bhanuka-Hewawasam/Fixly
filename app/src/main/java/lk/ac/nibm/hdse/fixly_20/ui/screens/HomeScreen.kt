@@ -35,7 +35,6 @@ import lk.ac.nibm.hdse.fixly_20.ui.components.FixlyBottomNavBar
 import lk.ac.nibm.hdse.fixly_20.ui.components.FixlyPrimaryButton
 import lk.ac.nibm.hdse.fixly_20.ui.components.FixlyTopBar
 import lk.ac.nibm.hdse.fixly_20.ui.components.MechanicIllustrationPanel
-import lk.ac.nibm.hdse.fixly_20.ui.components.VerifiedBadge
 import lk.ac.nibm.hdse.fixly_20.ui.theme.ThemeState
 import lk.ac.nibm.hdse.fixly_20.viewmodel.HomeViewModel
 
@@ -564,19 +563,22 @@ private fun CustomerDashboardView(
         Spacer(modifier = Modifier.height(20.dp))
 
         // --- MY BOOKINGS & BIDS ACTION CARD ---
-        Surface(
-            shape = RoundedCornerShape(18.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
-            shadowElevation = 1.dp,
+        Card(
+            onClick = onViewBookings,
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = Color.White
+            ),
+            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier
-                    .clickable(onClick = onViewBookings)
-                    .padding(16.dp)
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 16.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -587,12 +589,12 @@ private fun CustomerDashboardView(
                         modifier = Modifier
                             .size(44.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer)
+                            .background(Color(0xFFEFF6FF))
                     ) {
                         Icon(
                             imageVector = Icons.Default.History,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = Color(0xFF2563EB),
                             modifier = Modifier.size(22.dp)
                         )
                     }
@@ -603,15 +605,17 @@ private fun CustomerDashboardView(
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = Color(0xFF1E293B)
                             )
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = "Track requests and review provider bids",
                             style = MaterialTheme.typography.bodySmall.copy(
-                                fontSize = 12.5.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                fontWeight = FontWeight.Normal,
+                                fontSize = 13.sp,
+                                lineHeight = 17.sp,
+                                color = Color(0xFF64748B)
                             )
                         )
                     }
@@ -623,13 +627,13 @@ private fun CustomerDashboardView(
                     modifier = Modifier
                         .size(34.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                        .background(Color(0xFFEFF6FF)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                         contentDescription = "View Bookings",
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = Color(0xFF2563EB),
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -652,10 +656,12 @@ private fun ProviderDashboardView(
     Column {
         // VERIFICATION ALERT (IF UNVERIFIED)
         if (!isVerified) {
-            Surface(
-                shape = RoundedCornerShape(18.dp),
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primaryContainer),
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFFEFF6FF)
+                ),
+                border = BorderStroke(1.dp, Color(0xFFBFDBFE)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -665,7 +671,7 @@ private fun ProviderDashboardView(
                     Icon(
                         imageVector = Icons.Outlined.Info,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = Color(0xFF2563EB),
                         modifier = Modifier.size(26.dp)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
@@ -674,15 +680,17 @@ private fun ProviderDashboardView(
                             text = "Verification Pending",
                             style = MaterialTheme.typography.titleSmall.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 14.5.sp
+                                fontSize = 14.5.sp,
+                                color = Color(0xFF1E293B)
                             )
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = "Your certificate is under review. You can still browse jobs and submit bids.",
                             style = MaterialTheme.typography.bodySmall.copy(
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                fontSize = 12.5.sp,
+                                lineHeight = 16.sp,
+                                color = Color(0xFF64748B)
                             )
                         )
                     }
@@ -747,18 +755,22 @@ private fun ProviderDashboardView(
         Spacer(modifier = Modifier.height(18.dp))
 
         // ACCEPTED JOBS CARD
-        Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
+        Card(
+            onClick = onViewAcceptedJobs,
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = Color.White
+            ),
+            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier
-                    .clickable(onClick = onViewAcceptedJobs)
-                    .padding(18.dp)
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 16.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -767,15 +779,15 @@ private fun ProviderDashboardView(
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
-                            .size(46.dp)
+                            .size(44.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer)
+                            .background(Color(0xFFEFF6FF))
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.TaskAlt,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
+                            tint = Color(0xFF2563EB),
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(14.dp))
@@ -785,15 +797,17 @@ private fun ProviderDashboardView(
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = Color(0xFF1E293B)
                             )
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = "View jobs where your bid was selected",
                             style = MaterialTheme.typography.bodySmall.copy(
-                                fontSize = 12.5.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                fontWeight = FontWeight.Normal,
+                                fontSize = 13.sp,
+                                lineHeight = 17.sp,
+                                color = Color(0xFF64748B)
                             )
                         )
                     }
@@ -803,15 +817,15 @@ private fun ProviderDashboardView(
 
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(34.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                        .background(Color(0xFFEFF6FF)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                         contentDescription = "View Accepted Jobs",
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = Color(0xFF2563EB),
                         modifier = Modifier.size(18.dp)
                     )
                 }
