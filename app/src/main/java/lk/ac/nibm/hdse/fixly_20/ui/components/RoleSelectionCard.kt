@@ -1,7 +1,5 @@
 package lk.ac.nibm.hdse.fixly_20.ui.components
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -12,7 +10,6 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,94 +28,85 @@ fun RoleSelectionCard(
     onSelect: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val borderColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-        animationSpec = tween(250),
-        label = "RoleCardBorderColor"
-    )
-
-    val containerColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surface,
-        animationSpec = tween(250),
-        label = "RoleCardContainerColor"
-    )
-
-    val iconContainerColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-        animationSpec = tween(250),
-        label = "RoleCardIconBg"
-    )
-
-    val iconTint by animateColorAsState(
-        targetValue = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-        animationSpec = tween(250),
-        label = "RoleCardIconTint"
-    )
-
-    Surface(
+    Card(
         onClick = onSelect,
         shape = RoundedCornerShape(16.dp),
-        color = containerColor,
-        border = BorderStroke(if (isSelected) 2.dp else 1.dp, borderColor),
-        shadowElevation = if (isSelected) 2.dp else 0.dp,
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected) Color(0xFFEFF6FF) else Color.White
+        ),
+        border = BorderStroke(
+            width = if (isSelected) 2.dp else 1.dp,
+            color = if (isSelected) Color(0xFF2563EB) else Color(0xFFE2E8F0)
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isSelected) 2.dp else 0.dp
+        ),
         modifier = modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Left Circular Icon Badge
             Box(
                 modifier = Modifier
-                    .size(46.dp)
+                    .size(44.dp)
                     .clip(CircleShape)
-                    .background(iconContainerColor),
+                    .background(if (isSelected) Color(0xFF2563EB) else Color(0xFFEFF6FF)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = title,
-                    tint = iconTint,
+                    tint = if (isSelected) Color.White else Color(0xFF2563EB),
                     modifier = Modifier.size(22.dp)
                 )
             }
 
             Spacer(modifier = Modifier.width(14.dp))
 
-            Column(modifier = Modifier.weight(1f)) {
+            // Middle Text Block
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center
+            ) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        color = MaterialTheme.colorScheme.onSurface
+                        fontSize = 16.sp,
+                        color = Color(0xFF1E293B)
                     )
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = description,
                     style = MaterialTheme.typography.bodySmall.copy(
-                        fontSize = 12.5.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 13.sp,
+                        lineHeight = 17.sp,
+                        color = Color(0xFF64748B)
                     )
                 )
             }
 
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(12.dp))
 
+            // Right Selection Checkmark
             if (isSelected) {
                 Icon(
                     imageVector = Icons.Filled.CheckCircle,
                     contentDescription = "Selected",
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = Color(0xFF2563EB),
                     modifier = Modifier.size(22.dp)
                 )
             } else {
                 Icon(
                     imageVector = Icons.Outlined.RadioButtonUnchecked,
                     contentDescription = "Unselected",
-                    tint = MaterialTheme.colorScheme.outline,
+                    tint = Color(0xFFCBD5E1),
                     modifier = Modifier.size(22.dp)
                 )
             }

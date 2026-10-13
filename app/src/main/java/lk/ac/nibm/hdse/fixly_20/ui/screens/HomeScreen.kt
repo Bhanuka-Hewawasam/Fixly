@@ -35,7 +35,6 @@ import lk.ac.nibm.hdse.fixly_20.ui.components.FixlyBottomNavBar
 import lk.ac.nibm.hdse.fixly_20.ui.components.FixlyPrimaryButton
 import lk.ac.nibm.hdse.fixly_20.ui.components.FixlyTopBar
 import lk.ac.nibm.hdse.fixly_20.ui.components.MechanicIllustrationPanel
-import lk.ac.nibm.hdse.fixly_20.ui.components.VerifiedBadge
 import lk.ac.nibm.hdse.fixly_20.ui.theme.ThemeState
 import lk.ac.nibm.hdse.fixly_20.viewmodel.HomeViewModel
 
@@ -139,8 +138,6 @@ fun HomeScreen(
 
             else -> {
                 val user = uiState.user
-                val hasBothRoles = user != null &&
-                        user.roles.contains("customer") && user.roles.contains("provider")
 
                 Column(
                     modifier = Modifier
@@ -149,35 +146,6 @@ fun HomeScreen(
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 20.dp, vertical = 16.dp)
                 ) {
-                    // SEGMENTED ROLE SWITCHER (When user holds both customer & provider roles)
-                    if (hasBothRoles) {
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(4.dp)
-                            ) {
-                                SegmentedRoleTab(
-                                    title = "I need services (Customer)",
-                                    icon = Icons.Outlined.Person,
-                                    isSelected = uiState.activeRole == "customer",
-                                    onClick = { viewModel.switchRole("customer") },
-                                    modifier = Modifier.weight(1f)
-                                )
-                                SegmentedRoleTab(
-                                    title = "I offer services (Provider)",
-                                    icon = Icons.Outlined.Build,
-                                    isSelected = uiState.activeRole == "provider",
-                                    onClick = { viewModel.switchRole("provider") },
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(18.dp))
-                    }
-
                     // DASHBOARD CONTENT BASED ON ACTIVE ROLE
                     if (uiState.activeRole == "customer") {
                         CustomerDashboardView(
@@ -197,10 +165,11 @@ fun HomeScreen(
             }
         }
 
-        // PROFILE MENU BOTTOM SHEET
+        // PROFILE MENU BOTTOM SHEET (Anchored via TopBar Avatar Click)
         if (showProfileSheet && uiState.user != null) {
             val user = uiState.user!!
             val initial = (user.name.firstOrNull() ?: 'S').uppercaseChar()
+            val hasBothRoles = user.roles.contains("customer") && user.roles.contains("provider")
 
             ModalBottomSheet(
                 onDismissRequest = { showProfileSheet = false },
@@ -220,12 +189,15 @@ fun HomeScreen(
                             .size(76.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.primary)
-                            .clickable { profilePhotoPicker.launch("image/*") }
+                            .clickable(
+                                onClickLabel = "Change profile picture",
+                                onClick = { profilePhotoPicker.launch("image/*") }
+                            )
                     ) {
                         if (!user.profilePictureUrl.isNullOrBlank()) {
                             SubcomposeAsyncImage(
                                 model = user.profilePictureUrl,
-                                contentDescription = "Profile Photo",
+                                contentDescription = "Profile Photo of ${user.name}",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize()
                             )
@@ -277,7 +249,7 @@ fun HomeScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // User Name & Info
+                    // User Name & Email Header
                     Text(
                         text = user.name.ifBlank { "User" },
                         style = MaterialTheme.typography.titleLarge.copy(
@@ -291,24 +263,109 @@ fun HomeScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
+                    // Current Active Mode Indicator Badge
                     Surface(
                         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text(
-                            text = if (uiState.activeRole == "customer") "Customer Account" else "Service Provider Account",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            ),
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                        )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Check,
+                                contentDescription = "Current Mode",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (uiState.activeRole == "customer") "Current: Customer Mode" else "Current: Provider Mode",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                        }
                     }
 
-                    Spacer(modifier = Modifier.height(20.dp))
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                    // SWITCH ACCOUNT SECTION (Only if user has both roles)
+                    if (hasBothRoles) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.Start
+                        ) {
+                            Text(
+                                text = "Switch Account",
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                ),
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+                            )
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            val isCustomerMode = uiState.activeRole == "customer"
+                            val targetRole = if (isCustomerMode) "provider" else "customer"
+                            val switchLabel = if (isCustomerMode) "Switch to Provider" else "Switch to Customer"
+                            val switchIcon = if (isCustomerMode) Icons.Outlined.Build else Icons.Outlined.Person
+
+                            Surface(
+                                onClick = {
+                                    showProfileSheet = false
+                                    viewModel.switchRole(targetRole)
+                                },
+                                shape = RoundedCornerShape(14.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .defaultMinSize(minHeight = 48.dp)
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = switchIcon,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text(
+                                            text = switchLabel,
+                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 15.sp,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        )
+                                    }
+
+                                    Icon(
+                                        imageVector = Icons.Outlined.SwapHoriz,
+                                        contentDescription = "Switch Role",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
                     Spacer(modifier = Modifier.height(12.dp))
 
                     // Dark Mode Toggle Row
@@ -350,7 +407,7 @@ fun HomeScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .defaultMinSize(minHeight = 48.dp)
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(14.dp))
                             .clickable {
                                 showProfileSheet = false
                                 viewModel.logout()
@@ -379,45 +436,6 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(24.dp))
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun SegmentedRoleTab(
-    title: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
-        color = if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent,
-        shadowElevation = if (isSelected) 2.dp else 0.dp,
-        modifier = modifier
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelMedium.copy(
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                    fontSize = 12.sp,
-                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            )
         }
     }
 }
@@ -564,19 +582,22 @@ private fun CustomerDashboardView(
         Spacer(modifier = Modifier.height(20.dp))
 
         // --- MY BOOKINGS & BIDS ACTION CARD ---
-        Surface(
-            shape = RoundedCornerShape(18.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
-            shadowElevation = 1.dp,
+        Card(
+            onClick = onViewBookings,
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = Color.White
+            ),
+            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier
-                    .clickable(onClick = onViewBookings)
-                    .padding(16.dp)
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 16.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -587,12 +608,12 @@ private fun CustomerDashboardView(
                         modifier = Modifier
                             .size(44.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer)
+                            .background(Color(0xFFEFF6FF))
                     ) {
                         Icon(
                             imageVector = Icons.Default.History,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = Color(0xFF2563EB),
                             modifier = Modifier.size(22.dp)
                         )
                     }
@@ -603,15 +624,17 @@ private fun CustomerDashboardView(
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = Color(0xFF1E293B)
                             )
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = "Track requests and review provider bids",
                             style = MaterialTheme.typography.bodySmall.copy(
-                                fontSize = 12.5.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                fontWeight = FontWeight.Normal,
+                                fontSize = 13.sp,
+                                lineHeight = 17.sp,
+                                color = Color(0xFF64748B)
                             )
                         )
                     }
@@ -623,13 +646,13 @@ private fun CustomerDashboardView(
                     modifier = Modifier
                         .size(34.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                        .background(Color(0xFFEFF6FF)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                         contentDescription = "View Bookings",
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = Color(0xFF2563EB),
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -652,10 +675,12 @@ private fun ProviderDashboardView(
     Column {
         // VERIFICATION ALERT (IF UNVERIFIED)
         if (!isVerified) {
-            Surface(
-                shape = RoundedCornerShape(18.dp),
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primaryContainer),
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFFEFF6FF)
+                ),
+                border = BorderStroke(1.dp, Color(0xFFBFDBFE)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -665,7 +690,7 @@ private fun ProviderDashboardView(
                     Icon(
                         imageVector = Icons.Outlined.Info,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = Color(0xFF2563EB),
                         modifier = Modifier.size(26.dp)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
@@ -674,15 +699,17 @@ private fun ProviderDashboardView(
                             text = "Verification Pending",
                             style = MaterialTheme.typography.titleSmall.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 14.5.sp
+                                fontSize = 14.5.sp,
+                                color = Color(0xFF1E293B)
                             )
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = "Your certificate is under review. You can still browse jobs and submit bids.",
                             style = MaterialTheme.typography.bodySmall.copy(
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                fontSize = 12.5.sp,
+                                lineHeight = 16.sp,
+                                color = Color(0xFF64748B)
                             )
                         )
                     }
@@ -747,18 +774,22 @@ private fun ProviderDashboardView(
         Spacer(modifier = Modifier.height(18.dp))
 
         // ACCEPTED JOBS CARD
-        Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
+        Card(
+            onClick = onViewAcceptedJobs,
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = Color.White
+            ),
+            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier
-                    .clickable(onClick = onViewAcceptedJobs)
-                    .padding(18.dp)
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 16.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -767,15 +798,15 @@ private fun ProviderDashboardView(
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
-                            .size(46.dp)
+                            .size(44.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer)
+                            .background(Color(0xFFEFF6FF))
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.TaskAlt,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
+                            tint = Color(0xFF2563EB),
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(14.dp))
@@ -785,15 +816,17 @@ private fun ProviderDashboardView(
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = Color(0xFF1E293B)
                             )
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = "View jobs where your bid was selected",
                             style = MaterialTheme.typography.bodySmall.copy(
-                                fontSize = 12.5.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                fontWeight = FontWeight.Normal,
+                                fontSize = 13.sp,
+                                lineHeight = 17.sp,
+                                color = Color(0xFF64748B)
                             )
                         )
                     }
@@ -803,15 +836,15 @@ private fun ProviderDashboardView(
 
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(34.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                        .background(Color(0xFFEFF6FF)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                         contentDescription = "View Accepted Jobs",
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = Color(0xFF2563EB),
                         modifier = Modifier.size(18.dp)
                     )
                 }
