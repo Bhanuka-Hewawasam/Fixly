@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,7 +25,13 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
 import com.google.firebase.firestore.GeoPoint
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.rememberCameraPositionState
 import lk.ac.nibm.hdse.fixly_20.ui.components.formatRating
 import lk.ac.nibm.hdse.fixly_20.viewmodel.EmergencyViewModel
 import lk.ac.nibm.hdse.fixly_20.viewmodel.ProviderWithDistance
@@ -46,6 +53,19 @@ fun EmergencyScreen(
     val uiState by viewModel.uiState.collectAsState()
     var isLocating by remember { mutableStateOf(false) }
     var locationFailed by remember { mutableStateOf(false) }
+    var selectedProvider by remember { mutableStateOf<ProviderWithDistance?>(null) }
+
+    val customerLatLng = uiState.customerLocation?.let { LatLng(it.latitude, it.longitude) }
+    val cameraPositionState = rememberCameraPositionState {
+        customerLatLng?.let { position = CameraPosition.fromLatLngZoom(it, 13f) }
+    }
+
+    // Update camera when customer location changes for the first time
+    LaunchedEffect(customerLatLng) {
+        customerLatLng?.let {
+            cameraPositionState.position = CameraPosition.fromLatLngZoom(it, 13f)
+        }
+    }
 
     // Fresh GPS fix: this is "where the emergency is happening"
     fun fetchLocation() {
@@ -88,7 +108,7 @@ fun EmergencyScreen(
         try {
             context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(phoneNumber))))
         } catch (e: ActivityNotFoundException) {
-            // Device has no dialer app (e.g. some emulators) — nothing to open
+            // Device has no dialer app
         }
     }
 
@@ -127,7 +147,7 @@ fun EmergencyScreen(
                 }
             }
 
-            // --- Step B: filters + live results ---
+            // --- Step B: filters + map + live results ---
             else -> {
                 Column(modifier = Modifier.fillMaxSize().padding(padding)) {
 
@@ -146,12 +166,12 @@ fun EmergencyScreen(
                     Text(
                         "What do you need?",
                         style = MaterialTheme.typography.titleSmall,
-                        modifier = Modifier.padding(start = 16.dp, top = 12.dp)
+                        modifier = Modifier.padding(start = 16.dp, top = 8.dp)
                     )
                     Row(
                         modifier = Modifier
                             .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                            .padding(horizontal = 16.dp, vertical = 2.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         categoryFilters.forEach { category ->
@@ -166,12 +186,12 @@ fun EmergencyScreen(
                     Text(
                         "Search radius",
                         style = MaterialTheme.typography.titleSmall,
-                        modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+                        modifier = Modifier.padding(start = 16.dp, top = 2.dp)
                     )
                     Row(
                         modifier = Modifier
                             .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                            .padding(horizontal = 16.dp, vertical = 2.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         radiusOptionsKm.forEach { km ->
@@ -180,6 +200,44 @@ fun EmergencyScreen(
                                 onClick = { viewModel.setRadius(km) },
                                 label = { Text("$km km") }
                             )
+                        }
+                    }
+
+                    // --- Google Map ---
+                    if (customerLatLng != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(220.dp)
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            GoogleMap(
+                                modifier = Modifier.fillMaxSize(),
+                                cameraPositionState = cameraPositionState
+                            ) {
+                                // Customer location marker
+                                Marker(
+                                    state = MarkerState(position = customerLatLng),
+                                    title = "You are here"
+                                )
+
+                                // Provider markers
+                                uiState.results.forEach { item ->
+                                    val pLoc = item.provider.lastLocation
+                                    if (pLoc != null) {
+                                        val pLatLng = LatLng(pLoc.latitude, pLoc.longitude)
+                                        Marker(
+                                            state = MarkerState(position = pLatLng),
+                                            title = item.provider.name,
+                                            snippet = "${String.format(java.util.Locale.getDefault(), "%.1f", item.distanceKm)} km away",
+                                            onClick = {
+                                                selectedProvider = item
+                                                false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -219,6 +277,14 @@ fun EmergencyScreen(
                                 items(uiState.results) { item ->
                                     ProviderCard(
                                         item = item,
+                                        isSelected = selectedProvider?.provider?.uid == item.provider.uid,
+                                        onClick = {
+                                            selectedProvider = item
+                                            item.provider.lastLocation?.let { loc ->
+                                                val latLng = LatLng(loc.latitude, loc.longitude)
+                                                cameraPositionState.position = CameraPosition.fromLatLngZoom(latLng, 15f)
+                                            }
+                                        },
                                         onCall = { callProvider(item.provider.phoneNumber) }
                                     )
                                 }
@@ -232,7 +298,12 @@ fun EmergencyScreen(
 }
 
 @Composable
-private fun ProviderCard(item: ProviderWithDistance, onCall: () -> Unit) {
+private fun ProviderCard(
+    item: ProviderWithDistance,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    onCall: () -> Unit
+) {
     val provider = item.provider
     val distanceText = String.format(java.util.Locale.getDefault(), "%.1f", item.distanceKm)
     val updatedText = when {
@@ -241,7 +312,16 @@ private fun ProviderCard(item: ProviderWithDistance, onCall: () -> Unit) {
         else -> "${item.minutesAgo / 60} h ago"
     }
 
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        colors = if (isSelected) {
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+        } else {
+            CardDefaults.cardColors()
+        }
+    ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),

@@ -212,8 +212,23 @@ private fun AuthGate(
             onGoToLogin()
             return@LaunchedEffect
         }
-        val doc = FirebaseFirestore.getInstance().collection("users").document(currentUser.uid).get().await()
-        if (doc.exists()) onGoToHome() else onGoToCompleteProfile()
+
+        // Offline-safe: if Firestore can't be reached for the profile check, a signed-in user
+        // still goes Home (the screens there read the saved local data) instead of crashing.
+        val profileExists = try {
+            FirebaseFirestore.getInstance()
+                .collection("users")
+                .document(currentUser.uid)
+                .get()
+                .await()
+                .exists()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            true
+        }
+
+        if (profileExists) onGoToHome() else onGoToCompleteProfile()
     }
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
