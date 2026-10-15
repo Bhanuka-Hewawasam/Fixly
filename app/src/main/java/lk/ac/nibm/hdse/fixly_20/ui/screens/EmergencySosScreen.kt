@@ -1,0 +1,351 @@
+package lk.ac.nibm.hdse.fixly_20.ui.screens
+
+import android.Manifest
+import android.annotation.SuppressLint
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.firebase.firestore.GeoPoint
+import lk.ac.nibm.hdse.fixly_20.model.EmergencyAlert
+import lk.ac.nibm.hdse.fixly_20.model.EmergencyResponse
+import lk.ac.nibm.hdse.fixly_20.ui.components.formatRating
+import lk.ac.nibm.hdse.fixly_20.util.dialNumber
+import lk.ac.nibm.hdse.fixly_20.viewmodel.EmergencySosViewModel
+
+private val sosCategories = listOf("Any", "Plumbing", "Electrical", "Cleaning", "Other")
+
+@OptIn(ExperimentalMaterial3Api::class)
+@SuppressLint("MissingPermission") // permission is checked in onSendClicked() before any location call
+@Composable
+fun EmergencySosScreen(
+    onBack: () -> Unit,
+    onBrowseProviders: () -> Unit,
+    viewModel: EmergencySosViewModel = viewModel()
+) {
+    val context = LocalContext.current
+    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+
+    val uiState by viewModel.uiState.collectAsState()
+    val myAlert = uiState.myAlert
+
+    var note by remember { mutableStateOf("") }
+    var category by remember { mutableStateOf("Any") }
+    var isLocating by remember { mutableStateOf(false) }
+
+    // Step 1 of the one tap: where are we right now?
+    fun sendWithCurrentLocation() {
+        isLocating = true
+        fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+            .addOnSuccessListener { location ->
+                isLocating = false
+                if (location != null) {
+                    viewModel.sendAlert(GeoPoint(location.latitude, location.longitude), note, category)
+                } else {
+                    viewModel.showError("Couldn't get your location. Turn on GPS and try again.")
+                }
+            }
+            .addOnFailureListener {
+                isLocating = false
+                viewModel.showError("Couldn't get your location. Turn on GPS and try again.")
+            }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) sendWithCurrentLocation()
+        else viewModel.showError("Location permission is needed to send an emergency alert.")
+    }
+
+    fun onSendClicked() {
+        val hasPermission = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (hasPermission) sendWithCurrentLocation()
+        else permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("🚨 Emergency") },
+                navigationIcon = { TextButton(onClick = onBack) { Text("Back") } }
+            )
+        }
+    ) { padding ->
+        when {
+            uiState.isLoading -> {
+                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            }
+
+            myAlert != null -> WaitingContent(
+                alert = myAlert,
+                responses = uiState.responses,
+                paddingValues = padding,
+                onCall = { phone -> context.dialNumber(phone) },
+                onClose = viewModel::closeAlert,
+                onBrowseProviders = onBrowseProviders
+            )
+
+            else -> SendAlertContent(
+                paddingValues = padding,
+                isBusy = isLocating || uiState.isSending,
+                note = note,
+                onNoteChange = { note = it },
+                category = category,
+                onCategoryChange = { category = it },
+                errorMessage = uiState.errorMessage,
+                onSend = { onSendClicked() },
+                onBrowseProviders = onBrowseProviders
+            )
+        }
+    }
+}
+
+@Composable
+private fun SendAlertContent(
+    paddingValues: PaddingValues,
+    isBusy: Boolean,
+    note: String,
+    onNoteChange: (String) -> Unit,
+    category: String,
+    onCategoryChange: (String) -> Unit,
+    errorMessage: String?,
+    onSend: () -> Unit,
+    onBrowseProviders: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(paddingValues)
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            "Stuck on the road or need urgent help?",
+            style = MaterialTheme.typography.headlineSmall,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            "Tap once. We use your location and notify available providers near you — they can respond straight away.",
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // The one big button
+        Button(
+            onClick = onSend,
+            enabled = !isBusy,
+            shape = CircleShape,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.error,
+                contentColor = MaterialTheme.colorScheme.onError
+            ),
+            modifier = Modifier.size(200.dp)
+        ) {
+            if (isBusy) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(32.dp),
+                        strokeWidth = 3.dp,
+                        color = MaterialTheme.colorScheme.onError
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Sending...", style = MaterialTheme.typography.titleMedium)
+                }
+            } else {
+                Text(
+                    "🚨\nSEND\nALERT",
+                    style = MaterialTheme.typography.headlineSmall,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+
+        errorMessage?.let {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                it,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center
+            )
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Optional extras — the alert works fine without them
+        OutlinedTextField(
+            value = note,
+            onValueChange = onNoteChange,
+            label = { Text("What happened? (optional)") },
+            placeholder = { Text("e.g. flat tyre, engine won't start") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            "Who do you need? (optional)",
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            sosCategories.forEach { option ->
+                FilterChip(
+                    selected = category == option,
+                    onClick = { onCategoryChange(option) },
+                    label = { Text(option) }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        TextButton(onClick = onBrowseProviders) {
+            Text("Rather browse nearby providers yourself?")
+        }
+    }
+}
+
+@Composable
+private fun WaitingContent(
+    alert: EmergencyAlert,
+    responses: List<EmergencyResponse>,
+    paddingValues: PaddingValues,
+    onCall: (String) -> Unit,
+    onClose: () -> Unit,
+    onBrowseProviders: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(paddingValues)
+            .padding(16.dp)
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    "🚨 Your emergency alert is live",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "Available providers near you are being notified. They'll appear below as soon as they respond.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+                if (alert.note.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        "Your note: ${alert.note}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            "Providers coming to help (${responses.size})",
+            style = MaterialTheme.typography.titleMedium
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if (responses.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator()
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("Waiting for a provider to respond...", textAlign = TextAlign.Center)
+                    TextButton(onClick = onBrowseProviders) {
+                        Text("Browse providers & call manually")
+                    }
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(responses) { response ->
+                    ResponseCard(response = response, onCall = { onCall(response.providerPhone) })
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+        Button(onClick = onClose, modifier = Modifier.fillMaxWidth()) {
+            Text("✅ I got help — close alert")
+        }
+    }
+}
+
+@Composable
+private fun ResponseCard(response: EmergencyResponse, onCall: () -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(response.providerName, style = MaterialTheme.typography.titleMedium)
+            Text(
+                formatRating(response.providerRating, response.providerReviewCount),
+                style = MaterialTheme.typography.bodySmall
+            )
+
+            response.distanceKm?.let { distance ->
+                Text(
+                    "📍 ${String.format(java.util.Locale.getDefault(), "%.1f", distance)} km away — on the way",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+            Button(
+                onClick = onCall,
+                enabled = response.providerPhone.isNotBlank(),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    if (response.providerPhone.isBlank()) "No phone number"
+                    else "📞 Call ${response.providerName}"
+                )
+            }
+        }
+    }
+}

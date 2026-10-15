@@ -26,6 +26,7 @@ import lk.ac.nibm.hdse.fixly_20.ui.screens.AvailableJobsScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.CompleteProfileScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.CustomerTrackingScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.EmergencyScreen
+import lk.ac.nibm.hdse.fixly_20.ui.screens.EmergencySosScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.HomeScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.JobBidsScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.LoginScreen
@@ -45,6 +46,7 @@ object Routes {
     const val AVAILABLE_JOBS = "available_jobs"
     const val ACCEPTED_JOBS = "accepted_jobs"
     const val EMERGENCY = "emergency"
+    const val EMERGENCY_SOS = "emergency_sos"
     const val JOB_BIDS = "job_bids/{jobId}"
     fun jobBids(jobId: String) = "job_bids/$jobId"
     const val PROVIDER_TRACKING = "provider_tracking/{jobId}"
@@ -105,7 +107,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
         }
 
         composable(Routes.HOME) {
-            // The Emergency button floats on top of HomeScreen, so HomeScreen itself needs no changes
+            // The Emergency button floats on top of HomeScreen, opening 1-tap SOS alert
             Box(modifier = Modifier.fillMaxSize()) {
                 HomeScreen(
                     onLogout = {
@@ -118,7 +120,7 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                 )
 
                 ExtendedFloatingActionButton(
-                    onClick = { navController.navigate(Routes.EMERGENCY) },
+                    onClick = { navController.navigate(Routes.EMERGENCY_SOS) },
                     containerColor = MaterialTheme.colorScheme.error,
                     contentColor = MaterialTheme.colorScheme.onError,
                     modifier = Modifier
@@ -128,6 +130,13 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     Text("🚨 Emergency")
                 }
             }
+        }
+
+        composable(Routes.EMERGENCY_SOS) {
+            EmergencySosScreen(
+                onBack = { navController.popBackStack() },
+                onBrowseProviders = { navController.navigate(Routes.EMERGENCY) }
+            )
         }
 
         composable(Routes.EMERGENCY) {
@@ -213,8 +222,6 @@ private fun AuthGate(
             return@LaunchedEffect
         }
 
-        // Offline-safe: if Firestore can't be reached for the profile check, a signed-in user
-        // still goes Home (the screens there read the saved local data) instead of crashing.
         val profileExists = try {
             FirebaseFirestore.getInstance()
                 .collection("users")
