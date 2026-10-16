@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import lk.ac.nibm.hdse.fixly_20.model.EmergencyAlert
 import lk.ac.nibm.hdse.fixly_20.model.EmergencyResponse
+import lk.ac.nibm.hdse.fixly_20.model.ProviderNotification
+import java.util.Date
 
 class EmergencyAlertRepository(
     private val firebaseAuth: FirebaseAuth = FirebaseAuth.getInstance(),
@@ -20,8 +22,8 @@ class EmergencyAlertRepository(
     private val alerts = firestore.collection("emergencyAlerts")
 
     /**
-     * Customer sends a one-tap alert. A customer can only have ONE live alert at a time;
-     * old alerts that timed out without being closed are tidied up automatically.
+     * Customer sends a one-tap alert. A customer can only have ONE live alert at a time.
+     * Sets status = ACTIVE, createdAt, and expiresAt = createdAt + 30 minutes.
      */
     suspend fun sendAlert(
         customerName: String,
@@ -36,21 +38,24 @@ class EmergencyAlertRepository(
 
             val existing = alerts
                 .whereEqualTo("customerId", customerId)
-                .whereEqualTo("status", "Active")
+                .whereEqualTo("status", "ACTIVE")
                 .get().await()
 
             val now = System.currentTimeMillis()
             val hasLiveAlert = existing.documents.any { doc ->
-                val createdAt = doc.getDate("createdAt")?.time ?: now
-                now - createdAt < ALERT_LIFETIME_MS
+                val expiresAt = doc.getDate("expiresAt")?.time ?: (doc.getDate("createdAt")?.time?.plus(ALERT_LIFETIME_MS) ?: now)
+                now < expiresAt
             }
             if (hasLiveAlert) {
                 return Result.failure(IllegalStateException("You already have a live emergency alert"))
             }
 
-            existing.documents.forEach { it.reference.update("status", "Closed").await() }
+            existing.documents.forEach { it.reference.update("status", "CANCELLED").await() }
 
             val ref = alerts.document()
+            val createdAtDate = Date()
+            val expiresAtDate = Date(createdAtDate.time + ALERT_LIFETIME_MS)
+
             ref.set(
                 EmergencyAlert(
                     alertId = ref.id,
@@ -60,7 +65,9 @@ class EmergencyAlertRepository(
                     category = category,
                     note = note,
                     location = location,
-                    status = "Active"
+                    status = "ACTIVE",
+                    createdAt = createdAtDate,
+                    expiresAt = expiresAtDate
                 )
             ).await()
 
@@ -70,7 +77,7 @@ class EmergencyAlertRepository(
         }
     }
 
-    /** The logged-in customer's current live alert (null if none, or if it has timed out). */
+    /** The logged-in customer's current live alert (ACTIVE or ACCEPTED, not expired). */
     fun observeMyActiveAlert(): Flow<EmergencyAlert?> = callbackFlow {
         val customerId = firebaseAuth.currentUser?.uid
         if (customerId == null) {
@@ -81,25 +88,33 @@ class EmergencyAlertRepository(
 
         val listener = alerts
             .whereEqualTo("customerId", customerId)
-            .whereEqualTo("status", "Active")
+            .whereIn("status", listOf("ACTIVE", "ACCEPTED"))
             .addSnapshotListener { snapshot, error ->
                 if (error != null) { close(error); return@addSnapshotListener }
 
                 val now = System.currentTimeMillis()
                 val live = snapshot?.toObjects(EmergencyAlert::class.java)
-                    ?.firstOrNull { alert -> now - (alert.createdAt?.time ?: now) < ALERT_LIFETIME_MS }
+                    ?.firstOrNull { alert ->
+                        val expiresAt = alert.expiresAt?.time ?: ((alert.createdAt?.time ?: now) + ALERT_LIFETIME_MS)
+                        alert.status == "ACCEPTED" || now < expiresAt
+                    }
                 trySend(live)
             }
         awaitClose { listener.remove() }
     }
 
-    /** Every alert that is currently Active — providers' devices filter these by distance and category. */
+    /** Every alert that is currently ACTIVE — providers filter these by distance (<= 25km) and category. */
     fun observeActiveAlerts(): Flow<List<EmergencyAlert>> = callbackFlow {
         val listener = alerts
-            .whereEqualTo("status", "Active")
+            .whereEqualTo("status", "ACTIVE")
             .addSnapshotListener { snapshot, error ->
                 if (error != null) { close(error); return@addSnapshotListener }
-                trySend(snapshot?.toObjects(EmergencyAlert::class.java) ?: emptyList())
+                val now = System.currentTimeMillis()
+                val activeList = snapshot?.toObjects(EmergencyAlert::class.java)?.filter { alert ->
+                    val expiresAt = alert.expiresAt?.time ?: ((alert.createdAt?.time ?: now) + ALERT_LIFETIME_MS)
+                    now < expiresAt
+                } ?: emptyList()
+                trySend(activeList)
             }
         awaitClose { listener.remove() }
     }
@@ -122,7 +137,7 @@ class EmergencyAlertRepository(
         awaitClose { listener.remove() }
     }
 
-    /** Provider says "I can help". Document id = providerId, so repeating just overwrites. */
+    /** Provider says "I can help" (Response). */
     suspend fun respond(alertId: String, response: EmergencyResponse): Result<Unit> {
         return try {
             alerts.document(alertId).collection("responses")
@@ -134,10 +149,68 @@ class EmergencyAlertRepository(
         }
     }
 
-    /** Customer closes the alert (got help, or no longer needed). */
+    /**
+     * ATOMIC FIRST ACCEPTANCE:
+     * Uses a Firestore transaction to ensure only the first valid provider acceptance
+     * transitions ACTIVE -> ACCEPTED. If already accepted, throws an exception.
+     */
+    suspend fun acceptAlert(
+        alertId: String,
+        providerId: String,
+        providerName: String,
+        providerPhone: String
+    ): Result<Unit> {
+        return try {
+            firestore.runTransaction { transaction ->
+                val ref = alerts.document(alertId)
+                val snapshot = transaction.get(ref)
+                val status = snapshot.getString("status") ?: "ACTIVE"
+                if (status != "ACTIVE") {
+                    throw IllegalStateException("This request has already been accepted.")
+                }
+                transaction.update(
+                    ref,
+                    mapOf(
+                        "status" to "ACCEPTED",
+                        "acceptedProviderId" to providerId,
+                        "acceptedProviderName" to providerName,
+                        "acceptedProviderPhone" to providerPhone,
+                        "acceptedAt" to FieldValue.serverTimestamp()
+                    )
+                )
+            }.await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /** Customer closes or cancels the alert. */
     suspend fun closeAlert(alertId: String): Result<Unit> {
         return try {
-            alerts.document(alertId).update("status", "Closed").await()
+            alerts.document(alertId).update("status", "CANCELLED").await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // --- In-App Provider Notifications Center ---
+
+    fun observeProviderNotifications(providerId: String): Flow<List<ProviderNotification>> = callbackFlow {
+        val listener = firestore.collection("providerNotifications")
+            .whereEqualTo("providerId", providerId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) { close(error); return@addSnapshotListener }
+                trySend(snapshot?.toObjects(ProviderNotification::class.java) ?: emptyList())
+            }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun markNotificationRead(notificationId: String): Result<Unit> {
+        return try {
+            firestore.collection("providerNotifications").document(notificationId)
+                .update("isRead", true).await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -270,7 +343,7 @@ class EmergencyAlertRepository(
     }
 
     companion object {
-        /** An alert stops counting as "live" after 30 minutes. */
+        /** An alert expires after 30 minutes. */
         const val ALERT_LIFETIME_MS = 30L * 60 * 1000
     }
 }

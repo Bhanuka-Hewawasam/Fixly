@@ -29,6 +29,7 @@ import lk.ac.nibm.hdse.fixly_20.model.EmergencyAlert
 import lk.ac.nibm.hdse.fixly_20.model.EmergencyResponse
 import lk.ac.nibm.hdse.fixly_20.ui.components.formatRating
 import lk.ac.nibm.hdse.fixly_20.util.dialNumber
+import lk.ac.nibm.hdse.fixly_20.util.openInMaps
 import lk.ac.nibm.hdse.fixly_20.viewmodel.EmergencySosViewModel
 
 private val sosCategories = listOf("Any", "Plumbing", "Electrical", "Cleaning", "Other")
@@ -105,6 +106,7 @@ fun EmergencySosScreen(
                 responses = uiState.responses,
                 paddingValues = padding,
                 onCall = { phone -> context.dialNumber(phone) },
+                onOpenMaps = { lat, lon, label -> context.openInMaps(lat, lon, label) },
                 onClose = viewModel::closeAlert,
                 onBrowseProviders = onBrowseProviders
             )
@@ -158,7 +160,7 @@ private fun SendAlertContent(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            "Tap once. We use your location and notify available providers near you — they can respond straight away.",
+            "Tap once. We use your location and notify available providers within 25 km — they can respond straight away.",
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center
         )
@@ -261,7 +263,7 @@ private fun SendAlertContent(
                             onClick = viewModel::seedDemoProviders,
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Seed SOS Demo Providers", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                            Text("Seed Demo Providers", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
                         }
                         OutlinedButton(
                             onClick = viewModel::deleteDemoProviders,
@@ -286,77 +288,135 @@ private fun WaitingContent(
     responses: List<EmergencyResponse>,
     paddingValues: PaddingValues,
     onCall: (String) -> Unit,
+    onOpenMaps: (Double, Double, String) -> Unit,
     onClose: () -> Unit,
     onBrowseProviders: () -> Unit
 ) {
+    val isAccepted = alert.status == "ACCEPTED"
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(paddingValues)
             .padding(16.dp)
+            .verticalScroll(rememberScrollState())
     ) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    "🚨 Your emergency alert is live",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onErrorContainer
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    "Available providers near you are being notified. They'll appear below as soon as they respond.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onErrorContainer
-                )
-                if (alert.note.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        "Your note: ${alert.note}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            "Providers coming to help (${responses.size})",
-            style = MaterialTheme.typography.titleMedium
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-
-        if (responses.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                contentAlignment = Alignment.Center
+        if (isAccepted) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator()
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text("Waiting for a provider to respond...", textAlign = TextAlign.Center)
-                    TextButton(onClick = onBrowseProviders) {
-                        Text("Browse providers & call manually")
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        "✅ Provider Accepted Your Request!",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Name: ${alert.acceptedProviderName ?: "Provider"}",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Text(
+                        "Phone: ${alert.acceptedProviderPhone ?: "N/A"}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (!alert.acceptedProviderPhone.isNullOrBlank()) {
+                            Button(
+                                onClick = { onCall(alert.acceptedProviderPhone) },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("📞 Call Provider")
+                            }
+                        }
+                        if (alert.location != null) {
+                            OutlinedButton(
+                                onClick = {
+                                    onOpenMaps(alert.location.latitude, alert.location.longitude, alert.acceptedProviderName ?: "Provider")
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("🗺️ Open in Maps")
+                            }
+                        }
                     }
                 }
             }
         } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
             ) {
-                items(responses) { response ->
-                    ResponseCard(response = response, onCall = { onCall(response.providerPhone) })
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        "🚨 Searching for nearby providers within 25 km…",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "We are notifying available providers within 25 km of your location.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    if (alert.note.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            "Your note: ${alert.note}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
                 }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                "Providers responding (${responses.size})",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            if (responses.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(150.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Waiting for a provider to accept...", textAlign = TextAlign.Center)
+                    }
+                }
+            } else {
+                responses.forEach { response ->
+                    ResponseCard(response = response, onCall = { onCall(response.providerPhone) })
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            TextButton(
+                onClick = onBrowseProviders,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Browse nearby providers & call manually (Fallback)")
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
-        Button(onClick = onClose, modifier = Modifier.fillMaxWidth()) {
-            Text("✅ I got help — close alert")
+        Spacer(modifier = Modifier.height(24.dp))
+        Button(
+            onClick = onClose,
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(if (isAccepted) "Close Request" else "Cancel Emergency Request")
         }
     }
 }

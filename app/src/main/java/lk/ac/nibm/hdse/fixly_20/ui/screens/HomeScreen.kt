@@ -53,6 +53,9 @@ fun HomeScreen(
     val isDarkMode by ThemeState.isDarkMode.collectAsState()
 
     var showProfileSheet by remember { mutableStateOf(false) }
+    var showNotificationsSheet by remember { mutableStateOf(false) }
+    var selectedNotification by remember { mutableStateOf<lk.ac.nibm.hdse.fixly_20.model.ProviderNotification?>(null) }
+    val unreadCount = uiState.notifications.count { !it.isRead }
 
     val profilePhotoPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -68,7 +71,9 @@ fun HomeScreen(
                 title = "Fixly",
                 userName = uiState.user?.name,
                 profilePictureUrl = uiState.user?.profilePictureUrl,
-                onAvatarClick = { showProfileSheet = true }
+                onAvatarClick = { showProfileSheet = true },
+                unreadNotificationCount = if (uiState.activeRole == "provider") unreadCount else 0,
+                onNotificationClick = if (uiState.activeRole == "provider") { { showNotificationsSheet = true } } else null
             )
         },
         bottomBar = {
@@ -436,6 +441,150 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(24.dp))
                 }
             }
+        }
+
+        // NOTIFICATIONS BOTTOM SHEET
+        if (showNotificationsSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showNotificationsSheet = false },
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp)
+                        .navigationBarsPadding()
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "🚨 Emergency Notifications",
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                        )
+                        TextButton(onClick = { showNotificationsSheet = false }) {
+                            Text("Close")
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "ℹ️ Note: Phone push notifications are not active yet until Cloud Functions are deployed; viewing real-time in-app alerts here.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    if (uiState.notifications.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "No emergency notifications yet.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 400.dp)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            uiState.notifications.forEach { notif ->
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (notif.isRead) MaterialTheme.colorScheme.surfaceVariant
+                                        else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(16.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = notif.title.ifBlank { "Emergency Request" },
+                                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                            )
+                                            if (!notif.isRead) {
+                                                Badge { Text("NEW") }
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = notif.body,
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = "Service: ${notif.serviceType} • ${String.format(java.util.Locale.getDefault(), "%.1f", notif.distanceKm)} km away",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        Button(
+                                            onClick = {
+                                                viewModel.markNotificationRead(notif.notificationId)
+                                                selectedNotification = notif
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text("View Alert")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        selectedNotification?.let { notif ->
+            AlertDialog(
+                onDismissRequest = { selectedNotification = null },
+                title = { Text(notif.title) },
+                text = {
+                    Column {
+                        Text("Service: ${notif.serviceType}", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("Distance: ${String.format(java.util.Locale.getDefault(), "%.1f", notif.distanceKm)} km away", style = MaterialTheme.typography.bodySmall)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(notif.body, style = MaterialTheme.typography.bodyMedium)
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = { selectedNotification = null }) {
+                        Text("Close")
+                    }
+                }
+            )
         }
     }
 }

@@ -5,6 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -28,7 +30,9 @@ fun FixlyTopBar(
     userName: String? = null,
     profilePictureUrl: String? = null,
     onAvatarClick: (() -> Unit)? = null,
-    navigationIcon: @Composable (() -> Unit)? = null
+    navigationIcon: @Composable (() -> Unit)? = null,
+    unreadNotificationCount: Int = 0,
+    onNotificationClick: (() -> Unit)? = null
 ) {
     val initial = (userName?.firstOrNull() ?: 'S').uppercaseChar()
 
@@ -70,6 +74,25 @@ fun FixlyTopBar(
                 )
             },
             actions = {
+                if (onNotificationClick != null) {
+                    IconButton(onClick = onNotificationClick) {
+                        BadgedBox(
+                            badge = {
+                                if (unreadNotificationCount > 0) {
+                                    Badge { Text("$unreadNotificationCount") }
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Notifications,
+                                contentDescription = "Emergency Notifications",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                }
+
                 Box(
                     modifier = Modifier
                         .padding(end = 16.dp)

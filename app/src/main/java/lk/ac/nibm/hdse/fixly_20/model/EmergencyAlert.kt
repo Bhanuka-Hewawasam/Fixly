@@ -13,17 +13,21 @@ data class EmergencyAlert(
     val customerId: String = "",
     val customerName: String = "",
     val customerPhone: String = "",
-    val category: String = "Any",       // "Any" = every nearby provider is alerted
-    val note: String = "",              // optional: "Flat tyre on the Dambulla road"
-    val location: GeoPoint? = null,     // where the emergency is
-    val status: String = "Active",      // Active -> Closed
-    @ServerTimestamp val createdAt: Date? = null
+    val category: String = "Any",           // serviceType / category
+    val note: String = "",
+    val location: GeoPoint? = null,         // customerLocation
+    val status: String = "ACTIVE",          // ACTIVE, ACCEPTED, CANCELLED, EXPIRED, CLOSED
+    @ServerTimestamp val createdAt: Date? = null,
+    val expiresAt: Date? = null,
+    val acceptedProviderId: String? = null,
+    val acceptedProviderName: String? = null,
+    val acceptedProviderPhone: String? = null,
+    @ServerTimestamp val acceptedAt: Date? = null
 )
 
 /**
  * Firestore document: emergencyAlerts/{alertId}/responses/{providerId}
- * A provider saying "I can help, I'm on my way". The document id is the providerId,
- * so one provider can only respond once per alert.
+ * A provider saying "I can help, I'm on my way".
  */
 data class EmergencyResponse(
     val providerId: String = "",
@@ -31,6 +35,24 @@ data class EmergencyResponse(
     val providerPhone: String = "",
     val providerRating: Double = 0.0,
     val providerReviewCount: Int = 0,
-    val distanceKm: Double? = null,     // how far the provider was when they responded
+    val distanceKm: Double? = null,
+    @ServerTimestamp val createdAt: Date? = null
+)
+
+/**
+ * Firestore document: providerNotifications/{notificationId}
+ * In-app notification center entry for a provider.
+ */
+data class ProviderNotification(
+    val notificationId: String = "",
+    val providerId: String = "",
+    val alertId: String = "",
+    val type: String = "EMERGENCY_ALERT",
+    val title: String = "",
+    val body: String = "",
+    val serviceType: String = "",
+    val distanceKm: Double = 0.0,
+    val isRead: Boolean = false,
+    val status: String = "ACTIVE",
     @ServerTimestamp val createdAt: Date? = null
 )

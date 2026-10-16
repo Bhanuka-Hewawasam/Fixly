@@ -8,19 +8,23 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import lk.ac.nibm.hdse.fixly_20.data.repository.AuthRepository
+import lk.ac.nibm.hdse.fixly_20.data.repository.EmergencyAlertRepository
 import lk.ac.nibm.hdse.fixly_20.data.repository.UserRepository
+import lk.ac.nibm.hdse.fixly_20.model.ProviderNotification
 import lk.ac.nibm.hdse.fixly_20.model.User
 
 data class HomeUiState(
     val isLoading: Boolean = true,
     val user: User? = null,
     val activeRole: String = "customer", // which tab/view is currently shown
+    val notifications: List<ProviderNotification> = emptyList(),
     val errorMessage: String? = null
 )
 
 class HomeViewModel(
     private val userRepository: UserRepository = UserRepository(),
-    private val authRepository: AuthRepository = AuthRepository()
+    private val authRepository: AuthRepository = AuthRepository(),
+    private val alertRepository: EmergencyAlertRepository = EmergencyAlertRepository()
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -44,6 +48,7 @@ class HomeViewModel(
                         user = user,
                         activeRole = defaultRole
                     )
+                    observeNotifications(user.uid)
                 }
                 .onFailure { exception ->
                     _uiState.value = _uiState.value.copy(
@@ -51,6 +56,20 @@ class HomeViewModel(
                         errorMessage = exception.localizedMessage ?: "Could not load profile"
                     )
                 }
+        }
+    }
+
+    private fun observeNotifications(providerId: String) {
+        viewModelScope.launch {
+            alertRepository.observeProviderNotifications(providerId).collect { notifs ->
+                _uiState.value = _uiState.value.copy(notifications = notifs)
+            }
+        }
+    }
+
+    fun markNotificationRead(notificationId: String) {
+        viewModelScope.launch {
+            alertRepository.markNotificationRead(notificationId)
         }
     }
 
