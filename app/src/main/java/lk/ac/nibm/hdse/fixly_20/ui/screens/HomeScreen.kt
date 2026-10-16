@@ -59,6 +59,7 @@ fun HomeScreen(
     onViewBookings: () -> Unit,
     onViewAvailableJobs: () -> Unit,
     onViewAcceptedJobs: () -> Unit,
+    onEmergency: () -> Unit,
     viewModel: HomeViewModel = viewModel()
 ) {
     val context = LocalContext.current
@@ -99,6 +100,8 @@ fun HomeScreen(
                         when (route) {
                             "my_bookings" -> onViewBookings()
                             "available_jobs" -> onViewAvailableJobs()
+                            "accepted_jobs" -> onViewAcceptedJobs()
+                            "emergency_sos" -> onEmergency()
                         }
                     }
                 )
@@ -1160,7 +1163,6 @@ private fun ProviderDashboardView(
                             )
                         )
                     }
-                    EmergencyChip()
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))

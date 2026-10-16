@@ -289,15 +289,26 @@ fun EmergencyScreen(
                 Column(modifier = Modifier.fillMaxSize().padding(padding)) {
 
                     Card(
-                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                        shape = RoundedCornerShape(18.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
                     ) {
-                        Text(
-                            "Showing providers who are available right now within ${uiState.radiusKm} km of you, nearest first.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            modifier = Modifier.padding(12.dp)
-                        )
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                "Find help near you",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                            Text(
+                                "Showing available providers within ${uiState.radiusKm} km. Closest providers appear first.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
                     }
 
                     // --- DEBUG ONLY ACTIONS FOR TESTING ---
@@ -366,7 +377,7 @@ fun EmergencyScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(220.dp)
+                                .height(190.dp)
                                 .padding(horizontal = 16.dp, vertical = 8.dp)
                         ) {
                             GoogleMap(
@@ -396,6 +407,19 @@ fun EmergencyScreen(
                                     }
                                 }
                             }
+                            Surface(
+                                modifier = Modifier.align(Alignment.TopStart).padding(10.dp),
+                                shape = RoundedCornerShape(50),
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                                tonalElevation = 3.dp
+                            ) {
+                                Text(
+                                    "${displayedProviders.size} available",
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
                     }
 
@@ -416,8 +440,8 @@ fun EmergencyScreen(
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text(
-                                        "No providers available within ${uiState.radiusKm} km right now. " +
-                                            "Try a bigger radius, or post an urgent job so providers can respond to you.",
+                                        "No matching providers found within ${uiState.radiusKm} km. " +
+                                            "Try another service or a wider search radius. Providers need Emergency Availability on and a recent location.",
                                         textAlign = TextAlign.Center
                                     )
                                     Spacer(modifier = Modifier.height(12.dp))

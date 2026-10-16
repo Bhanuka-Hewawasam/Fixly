@@ -4,9 +4,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -107,29 +104,16 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
         }
 
         composable(Routes.HOME) {
-            // The Emergency button floats on top of HomeScreen, opening 1-tap SOS alert
-            Box(modifier = Modifier.fillMaxSize()) {
-                HomeScreen(
-                    onLogout = {
-                        navController.navigate(Routes.LOGIN) { popUpTo(Routes.HOME) { inclusive = true } }
-                    },
-                    onPostJob = { navController.navigate(Routes.POST_JOB) },
-                    onViewBookings = { navController.navigate(Routes.MY_BOOKINGS) },
-                    onViewAvailableJobs = { navController.navigate(Routes.AVAILABLE_JOBS) },
-                    onViewAcceptedJobs = { navController.navigate(Routes.ACCEPTED_JOBS) }
-                )
-
-                ExtendedFloatingActionButton(
-                    onClick = { navController.navigate(Routes.EMERGENCY_SOS) },
-                    containerColor = MaterialTheme.colorScheme.error,
-                    contentColor = MaterialTheme.colorScheme.onError,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(16.dp)
-                ) {
-                    Text("🚨 Emergency")
-                }
-            }
+            HomeScreen(
+                onLogout = {
+                    navController.navigate(Routes.LOGIN) { popUpTo(Routes.HOME) { inclusive = true } }
+                },
+                onPostJob = { navController.navigate(Routes.POST_JOB) },
+                onViewBookings = { navController.navigate(Routes.MY_BOOKINGS) },
+                onViewAvailableJobs = { navController.navigate(Routes.AVAILABLE_JOBS) },
+                onViewAcceptedJobs = { navController.navigate(Routes.ACCEPTED_JOBS) },
+                onEmergency = { navController.navigate(Routes.EMERGENCY_SOS) }
+            )
         }
 
         composable(Routes.EMERGENCY_SOS) {

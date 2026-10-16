@@ -4,8 +4,10 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ListAlt
+import androidx.compose.material.icons.filled.Emergency
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Work
+import androidx.compose.material.icons.outlined.Handyman
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -17,8 +19,10 @@ import androidx.compose.ui.unit.sp
 
 sealed class BottomNavItem(val route: String, val title: String, val icon: ImageVector) {
     object Home : BottomNavItem("home", "Home", Icons.Default.Home)
-    object Bookings : BottomNavItem("my_bookings", "Bookings", Icons.AutoMirrored.Filled.ListAlt)
+    object History : BottomNavItem("my_bookings", "History", Icons.AutoMirrored.Filled.ListAlt)
     object AvailableJobs : BottomNavItem("available_jobs", "Jobs", Icons.Default.Work)
+    object MyWork : BottomNavItem("accepted_jobs", "My Work", Icons.Outlined.Handyman)
+    object Emergency : BottomNavItem("emergency_sos", "Emergency", Icons.Default.Emergency)
 }
 
 @Composable
@@ -29,9 +33,9 @@ fun FixlyBottomNavBar(
     activeRole: String = "customer"
 ) {
     val items = if (activeRole == "customer") {
-        listOf(BottomNavItem.Home, BottomNavItem.Bookings)
+        listOf(BottomNavItem.Home, BottomNavItem.History, BottomNavItem.Emergency)
     } else {
-        listOf(BottomNavItem.Home, BottomNavItem.AvailableJobs)
+        listOf(BottomNavItem.Home, BottomNavItem.AvailableJobs, BottomNavItem.MyWork)
     }
 
     Surface(
@@ -54,7 +58,12 @@ fun FixlyBottomNavBar(
                     icon = {
                         Icon(
                             imageVector = item.icon,
-                            contentDescription = item.title
+                            contentDescription = item.title,
+                            tint = if (item == BottomNavItem.Emergency && selected) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                LocalContentColor.current
+                            }
                         )
                     },
                     label = {
