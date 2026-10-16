@@ -1,5 +1,6 @@
 package lk.ac.nibm.hdse.fixly_20.data.repository
 
+import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FieldValue
@@ -9,6 +10,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import lk.ac.nibm.hdse.fixly_20.BuildConfig
 import lk.ac.nibm.hdse.fixly_20.model.EmergencyAlert
 import lk.ac.nibm.hdse.fixly_20.model.EmergencyResponse
 import lk.ac.nibm.hdse.fixly_20.model.ProviderNotification
@@ -22,8 +24,7 @@ class EmergencyAlertRepository(
     private val alerts = firestore.collection("emergencyAlerts")
 
     /**
-     * Customer sends a one-tap alert. A customer can only have ONE live alert at a time.
-     * Sets status = ACTIVE, createdAt, and expiresAt = createdAt + 30 minutes.
+     * Customer sends a broadcast emergency alert.
      */
     suspend fun sendAlert(
         customerName: String,
@@ -71,8 +72,89 @@ class EmergencyAlertRepository(
                 )
             ).await()
 
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "DEBUG: request created - alertId: ${ref.id}")
+            }
+
             Result.success(ref.id)
         } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Customer sends a direct emergency request to a selected provider.
+     */
+    suspend fun sendDirectAlert(
+        customerName: String,
+        customerPhone: String,
+        category: String,
+        note: String,
+        location: GeoPoint,
+        selectedProviderId: String,
+        distanceKm: Double
+    ): Result<String> {
+        return try {
+            val customerId = firebaseAuth.currentUser?.uid
+                ?: return Result.failure(IllegalStateException("No logged-in user"))
+
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "DEBUG: sendDirectAlert - current customer UID: $customerId, selected provider UID: $selectedProviderId")
+            }
+
+            val ref = alerts.document()
+            val alertPath = "emergencyAlerts/${ref.id}"
+            val createdAtDate = Date()
+            val expiresAtDate = Date(createdAtDate.time + ALERT_LIFETIME_MS)
+
+            val alert = EmergencyAlert(
+                alertId = ref.id,
+                customerId = customerId,
+                customerName = customerName,
+                customerPhone = customerPhone,
+                category = category,
+                note = note,
+                location = location,
+                status = "ACTIVE",
+                createdAt = createdAtDate,
+                expiresAt = expiresAtDate,
+                selectedProviderId = selectedProviderId
+            )
+
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "DEBUG: request created - alertId: ${ref.id}, document path written: $alertPath with fields: $alert")
+            }
+
+            ref.set(alert).await()
+
+            // Create providerNotifications document targeted only to selectedProviderId
+            val notifId = "${ref.id}_$selectedProviderId"
+            val notifPath = "providerNotifications/$notifId"
+            val notifRef = firestore.collection("providerNotifications").document(notifId)
+            val notification = ProviderNotification(
+                notificationId = notifId,
+                providerId = selectedProviderId,
+                alertId = ref.id,
+                type = "EMERGENCY_ALERT",
+                title = "🚨 Direct Request from $customerName",
+                body = note.ifBlank { "Customer needs urgent help ($category)." },
+                serviceType = category,
+                distanceKm = distanceKm,
+                isRead = false,
+                status = "ACTIVE"
+            )
+
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "DEBUG: provider notification document path written: $notifPath")
+            }
+
+            notifRef.set(notification).await()
+
+            Result.success(ref.id)
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "DEBUG: sendDirectAlert failed", e)
+            }
             Result.failure(e)
         }
     }
@@ -84,6 +166,10 @@ class EmergencyAlertRepository(
             trySend(null)
             close()
             return@callbackFlow
+        }
+
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "DEBUG: waiting observer started for customerId: $customerId")
         }
 
         val listener = alerts
@@ -103,27 +189,32 @@ class EmergencyAlertRepository(
         awaitClose { listener.remove() }
     }
 
-    /** Every alert that is currently ACTIVE — providers filter these by distance (<= 25km) and category. */
-    fun observeActiveAlerts(): Flow<List<EmergencyAlert>> = callbackFlow {
-        val listener = alerts
-            .whereEqualTo("status", "ACTIVE")
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) { close(error); return@addSnapshotListener }
-                val now = System.currentTimeMillis()
-                val activeList = snapshot?.toObjects(EmergencyAlert::class.java)?.filter { alert ->
-                    val expiresAt = alert.expiresAt?.time ?: ((alert.createdAt?.time ?: now) + ALERT_LIFETIME_MS)
-                    now < expiresAt
-                } ?: emptyList()
-                trySend(activeList)
-            }
-        awaitClose { listener.remove() }
-    }
-
     fun observeAlert(alertId: String): Flow<EmergencyAlert?> = callbackFlow {
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "DEBUG: waiting observer started for alertId: $alertId")
+        }
+        var lastStatus: String? = null
         val listener = alerts.document(alertId)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) { close(error); return@addSnapshotListener }
-                trySend(snapshot?.toObject(EmergencyAlert::class.java))
+                val alert = snapshot?.toObject(EmergencyAlert::class.java)
+                if (alert != null) {
+                    if (BuildConfig.DEBUG && lastStatus != alert.status) {
+                        Log.d(TAG, "DEBUG: each status change - alertId: $alertId status changed from $lastStatus to ${alert.status}")
+                        if (alert.status == "ACCEPTED") {
+                            Log.d(TAG, "DEBUG: provider acceptance received - providerName: ${alert.acceptedProviderName}")
+                        }
+                        lastStatus = alert.status
+                    }
+                    val now = System.currentTimeMillis()
+                    val expiresAt = alert.expiresAt?.time ?: ((alert.createdAt?.time ?: now) + ALERT_LIFETIME_MS)
+                    if (alert.status == "ACTIVE" && now >= expiresAt) {
+                        if (BuildConfig.DEBUG) {
+                            Log.d(TAG, "DEBUG: expiry result - request $alertId expired")
+                        }
+                    }
+                }
+                trySend(alert)
             }
         awaitClose { listener.remove() }
     }
@@ -137,22 +228,9 @@ class EmergencyAlertRepository(
         awaitClose { listener.remove() }
     }
 
-    /** Provider says "I can help" (Response). */
-    suspend fun respond(alertId: String, response: EmergencyResponse): Result<Unit> {
-        return try {
-            alerts.document(alertId).collection("responses")
-                .document(response.providerId)
-                .set(response).await()
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
     /**
      * ATOMIC FIRST ACCEPTANCE:
-     * Uses a Firestore transaction to ensure only the first valid provider acceptance
-     * transitions ACTIVE -> ACCEPTED. If already accepted, throws an exception.
+     * Uses a Firestore transaction to ensure only the selected provider accepts this request.
      */
     suspend fun acceptAlert(
         alertId: String,
@@ -161,13 +239,23 @@ class EmergencyAlertRepository(
         providerPhone: String
     ): Result<Unit> {
         return try {
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "DEBUG: acceptAlert starting for alertId: $alertId by providerId: $providerId")
+            }
+
             firestore.runTransaction { transaction ->
                 val ref = alerts.document(alertId)
                 val snapshot = transaction.get(ref)
                 val status = snapshot.getString("status") ?: "ACTIVE"
+                val selectedProviderId = snapshot.getString("selectedProviderId")
+
                 if (status != "ACTIVE") {
-                    throw IllegalStateException("This request has already been accepted.")
+                    throw IllegalStateException("This request has already been accepted or closed.")
                 }
+                if (!selectedProviderId.isNullOrBlank() && selectedProviderId != providerId) {
+                    throw IllegalStateException("This request was sent to a specific provider.")
+                }
+
                 transaction.update(
                     ref,
                     mapOf(
@@ -179,8 +267,45 @@ class EmergencyAlertRepository(
                     )
                 )
             }.await()
+
+            // Also update notification status to ACCEPTED
+            val notifId = "${alertId}_$providerId"
+            firestore.collection("providerNotifications").document(notifId)
+                .update(mapOf("status" to "ACCEPTED", "isRead" to true)).await()
+
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "DEBUG: Accept/Decline transaction result - acceptAlert SUCCESS for alertId: $alertId")
+            }
             Result.success(Unit)
         } catch (e: Exception) {
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "DEBUG: Accept/Decline transaction result - acceptAlert FAILED", e)
+            }
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Provider declines the request.
+     */
+    suspend fun declineAlert(alertId: String, providerId: String, notificationId: String): Result<Unit> {
+        return try {
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "DEBUG: declineAlert starting for alertId: $alertId by providerId: $providerId")
+            }
+
+            alerts.document(alertId).update("status", "DECLINED").await()
+            firestore.collection("providerNotifications").document(notificationId)
+                .update(mapOf("status" to "DECLINED", "isRead" to true)).await()
+
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "DEBUG: Accept/Decline transaction result - declineAlert SUCCESS for alertId: $alertId")
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "DEBUG: Accept/Decline transaction result - declineAlert FAILED", e)
+            }
             Result.failure(e)
         }
     }
@@ -188,9 +313,27 @@ class EmergencyAlertRepository(
     /** Customer closes or cancels the alert. */
     suspend fun closeAlert(alertId: String): Result<Unit> {
         return try {
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "DEBUG: cancel result - closeAlert starting for alertId: $alertId")
+            }
+            val docSnap = alerts.document(alertId).get().await()
+            val selectedProviderId = docSnap.getString("selectedProviderId")
+
             alerts.document(alertId).update("status", "CANCELLED").await()
+            if (!selectedProviderId.isNullOrBlank()) {
+                val notifId = "${alertId}_$selectedProviderId"
+                firestore.collection("providerNotifications").document(notifId)
+                    .update(mapOf("status" to "CANCELLED", "isRead" to true)).await()
+            }
+
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "DEBUG: cancel result - closeAlert SUCCESS for alertId: $alertId")
+            }
             Result.success(Unit)
         } catch (e: Exception) {
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "DEBUG: cancel result - closeAlert FAILED", e)
+            }
             Result.failure(e)
         }
     }
@@ -198,11 +341,24 @@ class EmergencyAlertRepository(
     // --- In-App Provider Notifications Center ---
 
     fun observeProviderNotifications(providerId: String): Flow<List<ProviderNotification>> = callbackFlow {
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "DEBUG: Provider listener query - observing providerNotifications where providerId == $providerId (current provider UID)")
+        }
         val listener = firestore.collection("providerNotifications")
             .whereEqualTo("providerId", providerId)
             .addSnapshotListener { snapshot, error ->
-                if (error != null) { close(error); return@addSnapshotListener }
-                trySend(snapshot?.toObjects(ProviderNotification::class.java) ?: emptyList())
+                if (error != null) {
+                    if (BuildConfig.DEBUG) {
+                        Log.e(TAG, "DEBUG: observeProviderNotifications error", error)
+                    }
+                    close(error)
+                    return@addSnapshotListener
+                }
+                val list = snapshot?.toObjects(ProviderNotification::class.java) ?: emptyList()
+                if (BuildConfig.DEBUG) {
+                    Log.d(TAG, "DEBUG: number of notifications received: ${list.size} for providerId: $providerId")
+                }
+                trySend(list)
             }
         awaitClose { listener.remove() }
     }
@@ -217,7 +373,17 @@ class EmergencyAlertRepository(
         }
     }
 
-    /** DEV-ONLY: Seed demo providers (1 through 6) for testing SOS and Emergency Map */
+    suspend fun updateNotificationStatus(notificationId: String, newStatus: String): Result<Unit> {
+        return try {
+            firestore.collection("providerNotifications").document(notificationId)
+                .update(mapOf("status" to newStatus, "isRead" to true)).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /** DEV-ONLY: Seed demo providers (1 through 6) */
     suspend fun seedDemoProviders(): Result<Unit> {
         return try {
             val batch = firestore.batch()
@@ -321,7 +487,7 @@ class EmergencyAlertRepository(
         }
     }
 
-    /** DEV-ONLY: Delete only demo providers starting with demo_sos_provider_ */
+    /** DEV-ONLY: Delete demo providers */
     suspend fun deleteDemoProviders(): Result<Unit> {
         return try {
             val snapshot = firestore.collection("users")
@@ -343,7 +509,7 @@ class EmergencyAlertRepository(
     }
 
     companion object {
-        /** An alert expires after 30 minutes. */
+        private const val TAG = "EmergencyAlertRepository"
         const val ALERT_LIFETIME_MS = 30L * 60 * 1000
     }
 }

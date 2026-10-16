@@ -6,7 +6,7 @@ import java.util.Date
 
 /**
  * Firestore document: emergencyAlerts/{alertId}
- * A customer's one-tap "I need help right now" request.
+ * A customer's emergency request (direct or broadcast).
  */
 data class EmergencyAlert(
     val alertId: String = "",
@@ -16,9 +16,10 @@ data class EmergencyAlert(
     val category: String = "Any",           // serviceType / category
     val note: String = "",
     val location: GeoPoint? = null,         // customerLocation
-    val status: String = "ACTIVE",          // ACTIVE, ACCEPTED, CANCELLED, EXPIRED, CLOSED
+    val status: String = "ACTIVE",          // ACTIVE, ACCEPTED, CANCELLED, EXPIRED, CLOSED, DECLINED
     @ServerTimestamp val createdAt: Date? = null,
     val expiresAt: Date? = null,
+    val selectedProviderId: String? = null, // target provider for direct request
     val acceptedProviderId: String? = null,
     val acceptedProviderName: String? = null,
     val acceptedProviderPhone: String? = null,
@@ -27,7 +28,7 @@ data class EmergencyAlert(
 
 /**
  * Firestore document: emergencyAlerts/{alertId}/responses/{providerId}
- * A provider saying "I can help, I'm on my way".
+ * A provider saying "I can help".
  */
 data class EmergencyResponse(
     val providerId: String = "",
@@ -53,6 +54,6 @@ data class ProviderNotification(
     val serviceType: String = "",
     val distanceKm: Double = 0.0,
     val isRead: Boolean = false,
-    val status: String = "ACTIVE",
+    val status: String = "ACTIVE",          // ACTIVE, ACCEPTED, CLOSED, CANCELLED, DECLINED
     @ServerTimestamp val createdAt: Date? = null
 )

@@ -36,6 +36,7 @@ import lk.ac.nibm.hdse.fixly_20.ui.components.FixlyPrimaryButton
 import lk.ac.nibm.hdse.fixly_20.ui.components.FixlyTopBar
 import lk.ac.nibm.hdse.fixly_20.ui.components.MechanicIllustrationPanel
 import lk.ac.nibm.hdse.fixly_20.ui.theme.ThemeState
+import lk.ac.nibm.hdse.fixly_20.util.dialNumber
 import lk.ac.nibm.hdse.fixly_20.viewmodel.HomeViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -262,109 +263,65 @@ fun HomeScreen(
                             fontSize = 20.sp
                         )
                     )
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = user.email,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                    // Current Active Mode Indicator Badge
-                    Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Check,
-                                contentDescription = "Current Mode",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = if (uiState.activeRole == "customer") "Current: Customer Mode" else "Current: Provider Mode",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            )
-                        }
-                    }
-
-                    // SWITCH ACCOUNT SECTION (Only if user has both roles)
+                    // ROLE SWITCHER (IF USER HAS BOTH CUSTOMER AND PROVIDER ROLES)
                     if (hasBothRoles) {
-                        Spacer(modifier = Modifier.height(16.dp))
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
-                        Spacer(modifier = Modifier.height(12.dp))
+                        val targetRole = if (uiState.activeRole == "customer") "provider" else "customer"
+                        val switchLabel = if (uiState.activeRole == "customer") "Switch to Provider Dashboard" else "Switch to Customer Dashboard"
 
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalAlignment = Alignment.Start
+                        Card(
+                            onClick = {
+                                viewModel.switchRole(targetRole)
+                                showProfileSheet = false
+                            },
+                            shape = RoundedCornerShape(14.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(
-                                text = "Switch Account",
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                ),
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
-                            )
-
-                            Spacer(modifier = Modifier.height(4.dp))
-
-                            val isCustomerMode = uiState.activeRole == "customer"
-                            val targetRole = if (isCustomerMode) "provider" else "customer"
-                            val switchLabel = if (isCustomerMode) "Switch to Provider" else "Switch to Customer"
-                            val switchIcon = if (isCustomerMode) Icons.Outlined.Build else Icons.Outlined.Person
-
-                            Surface(
-                                onClick = {
-                                    showProfileSheet = false
-                                    viewModel.switchRole(targetRole)
-                                },
-                                shape = RoundedCornerShape(14.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
-                                modifier = Modifier.fillMaxWidth()
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .defaultMinSize(minHeight = 48.dp)
-                                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = switchIcon,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                        Text(
-                                            text = switchLabel,
-                                            style = MaterialTheme.typography.titleMedium.copy(
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 15.sp,
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                        )
-                                    }
-
+                                Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
-                                        imageVector = Icons.Outlined.SwapHoriz,
-                                        contentDescription = "Switch Role",
+                                        imageVector = if (targetRole == "provider") Icons.Outlined.WorkOutline else Icons.Outlined.Person,
+                                        contentDescription = null,
                                         tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp)
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = switchLabel,
+                                        style = MaterialTheme.typography.titleMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 15.sp,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
                                     )
                                 }
+
+                                Icon(
+                                    imageVector = Icons.Outlined.SwapHoriz,
+                                    contentDescription = "Switch Role",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
                             }
                         }
                     }
@@ -476,7 +433,7 @@ fun HomeScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "ℹ️ Note: Phone push notifications are not active yet until Cloud Functions are deployed; viewing real-time in-app alerts here.",
+                            text = "This request appears instantly in the provider dashboard while the provider is online. Phone push notifications require a backend push service.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             modifier = Modifier.padding(12.dp)
@@ -548,14 +505,31 @@ fun HomeScreen(
                                         }
 
                                         Spacer(modifier = Modifier.height(12.dp))
-                                        Button(
-                                            onClick = {
-                                                viewModel.markNotificationRead(notif.notificationId)
-                                                selectedNotification = notif
-                                            },
-                                            modifier = Modifier.fillMaxWidth()
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
-                                            Text("View Alert")
+                                            Button(
+                                                onClick = {
+                                                    viewModel.acceptAlert(notif.alertId) { success, _ ->
+                                                        if (success) {
+                                                            viewModel.markNotificationRead(notif.notificationId)
+                                                            selectedNotification = notif
+                                                        }
+                                                    }
+                                                },
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text("Accept / I can help")
+                                            }
+                                            OutlinedButton(
+                                                onClick = {
+                                                    viewModel.declineAlert(notif.notificationId)
+                                                },
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text("Decline")
+                                            }
                                         }
                                     }
                                 }
@@ -604,98 +578,67 @@ private fun CustomerDashboardView(
             elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                // Modern Decorative Banner Panel
-                Surface(
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
-                    shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp)
+            Column(modifier = Modifier.padding(20.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-                            shape = RoundedCornerShape(10.dp),
-                            shadowElevation = 1.dp
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.HomeRepairService,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "On-Demand Service",
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 11.5.sp,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                )
-                            }
-                        }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Outlined.Build,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(26.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "What do you need fixed?",
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 19.sp
+                            )
+                        )
                     }
+                    EmergencyChip()
                 }
 
-                // Compact Card Text & Action Button
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Text(
-                        text = "What do you need fixed?",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 19.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Post a job request to get competitive bids from qualified local service providers.",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = 13.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                )
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
-                    Text(
-                        text = "Post a job and get offers from verified professionals.",
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontSize = 13.5.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    FixlyPrimaryButton(
-                        text = "Post a Job Now",
-                        icon = Icons.Outlined.AddCircle,
-                        onClick = onPostJob
-                    )
-                }
+                FixlyPrimaryButton(
+                    text = "Post a New Job",
+                    icon = Icons.Outlined.Add,
+                    onClick = onPostJob
+                )
             }
         }
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // --- POPULAR SERVICE CATEGORIES ---
+        // --- SERVICE CATEGORIES ---
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.fillMaxWidth()
         ) {
             Text(
-                text = "Popular Service Categories",
+                text = "Popular Categories",
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.Bold,
                     fontSize = 17.sp,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = Color(0xFF1E293B)
                 )
             )
+
             TextButton(
                 onClick = onPostJob,
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)

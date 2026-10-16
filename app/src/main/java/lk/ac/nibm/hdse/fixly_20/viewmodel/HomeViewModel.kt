@@ -73,6 +73,25 @@ class HomeViewModel(
         }
     }
 
+    fun acceptAlert(alertId: String, onResult: (Boolean, String?) -> Unit) {
+        viewModelScope.launch {
+            val user = _uiState.value.user
+            if (user == null) {
+                onResult(false, "User profile not loaded")
+                return@launch
+            }
+            alertRepository.acceptAlert(alertId, user.uid, user.name, user.phoneNumber)
+                .onSuccess { onResult(true, null) }
+                .onFailure { e -> onResult(false, e.localizedMessage) }
+        }
+    }
+
+    fun declineAlert(notificationId: String) {
+        viewModelScope.launch {
+            alertRepository.updateNotificationStatus(notificationId, "DECLINED")
+        }
+    }
+
     fun uploadProfilePicture(context: Context, imageUri: Uri) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)

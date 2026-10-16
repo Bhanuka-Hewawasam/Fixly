@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -15,11 +16,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -33,9 +37,16 @@ import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import lk.ac.nibm.hdse.fixly_20.data.repository.EmergencyAlertRepository
+import lk.ac.nibm.hdse.fixly_20.model.EmergencyAlert
 import lk.ac.nibm.hdse.fixly_20.ui.components.formatRating
+import lk.ac.nibm.hdse.fixly_20.util.openInMaps
 import lk.ac.nibm.hdse.fixly_20.viewmodel.EmergencyViewModel
 import lk.ac.nibm.hdse.fixly_20.viewmodel.ProviderWithDistance
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 private val categoryFilters = listOf("Any", "Plumbing", "Electrical", "Cleaning", "Other")
 private val radiusOptionsKm = listOf(5, 10, 25, 50)
@@ -49,13 +60,45 @@ fun EmergencyScreen(
     viewModel: EmergencyViewModel = viewModel()
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+    val alertRepository = remember { EmergencyAlertRepository() }
 
     val uiState by viewModel.uiState.collectAsState()
+    val myActiveAlertFlow by alertRepository.observeMyActiveAlert().collectAsState(initial = null)
+
     var isLocating by remember { mutableStateOf(false) }
     var locationFailed by remember { mutableStateOf(false) }
     var selectedProvider by remember { mutableStateOf<ProviderWithDistance?>(null) }
     var debugMsg by remember { mutableStateOf<String?>(null) }
+
+    // Request help dialog & active request states
+    var requestingProvider by remember { mutableStateOf<ProviderWithDistance?>(null) }
+    var requestNote by remember { mutableStateOf("") }
+    var activeRequestId by remember { mutableStateOf<String?>(null) }
+    var activeAlert by remember { mutableStateOf<EmergencyAlert?>(null) }
+    var requestErrorMessage by remember { mutableStateOf<String?>(null) }
+    var isSendingRequest by remember { mutableStateOf(false) }
+    var isMinimized by remember { mutableStateOf(false) }
+
+    // Automatically bind to existing active alert if customer returns to Emergency
+    LaunchedEffect(myActiveAlertFlow) {
+        if (myActiveAlertFlow != null && activeRequestId == null) {
+            activeRequestId = myActiveAlertFlow!!.alertId
+            isMinimized = false
+        }
+    }
+
+    LaunchedEffect(activeRequestId) {
+        if (activeRequestId != null) {
+            alertRepository.observeAlert(activeRequestId!!).collect { alert ->
+                activeAlert = alert
+            }
+        } else {
+            activeAlert = null
+            isMinimized = false
+        }
+    }
 
     val customerLatLng = uiState.customerLocation?.let { LatLng(it.latitude, it.longitude) }
     val cameraPositionState = rememberCameraPositionState {
@@ -267,7 +310,7 @@ fun EmergencyScreen(
                                         Marker(
                                             state = MarkerState(position = pLatLng),
                                             title = item.provider.name,
-                                            snippet = "${String.format(java.util.Locale.getDefault(), "%.1f", item.distanceKm)} km away",
+                                            snippet = "${String.format(Locale.getDefault(), "%.1f", item.distanceKm)} km away",
                                             onClick = {
                                                 selectedProvider = item
                                                 false
@@ -323,9 +366,366 @@ fun EmergencyScreen(
                                                 cameraPositionState.position = CameraPosition.fromLatLngZoom(latLng, 15f)
                                             }
                                         },
+                                        onRequestHelp = {
+                                            if (activeRequestId != null) {
+                                                requestErrorMessage = "You already have an active emergency request."
+                                                isMinimized = false
+                                            } else {
+                                                requestingProvider = item
+                                            }
+                                        },
                                         onCall = { callProvider(item.provider.phoneNumber) }
                                     )
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // --- REQUEST HELP NOTE DIALOG ---
+    requestingProvider?.let { item ->
+        AlertDialog(
+            onDismissRequest = { requestingProvider = null },
+            title = { Text("Request Help from ${item.provider.name}") },
+            text = {
+                Column {
+                    Text(
+                        "This request appears instantly in the provider dashboard while the provider is online. Phone push notifications require a backend push service.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = requestNote,
+                        onValueChange = { requestNote = it },
+                        label = { Text("What happened? (optional note)") },
+                        placeholder = { Text("e.g. flat tyre, engine won't start") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    requestErrorMessage?.let { err ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(err, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        isSendingRequest = true
+                        requestErrorMessage = null
+                        viewModel.sendDirectRequest(
+                            providerId = item.provider.uid,
+                            distanceKm = item.distanceKm,
+                            note = requestNote,
+                            category = uiState.selectedCategory
+                        ) { result ->
+                            isSendingRequest = false
+                            result.onSuccess { alertId ->
+                                activeRequestId = alertId
+                                isMinimized = false
+                                requestingProvider = null
+                                requestNote = ""
+                            }.onFailure { e ->
+                                requestErrorMessage = e.localizedMessage ?: "Failed to send request"
+                            }
+                        }
+                    },
+                    enabled = !isSendingRequest
+                ) {
+                    if (isSendingRequest) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Confirm Request Help")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { requestingProvider = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // --- ACTIVE REQUEST WAITING & STATUS VIEW ---
+    activeRequestId?.let { reqId ->
+        val alert = activeAlert
+        val status = alert?.status ?: "ACTIVE"
+        val isAccepted = status == "ACCEPTED"
+        val isDeclined = status == "DECLINED"
+        val isCancelled = status == "CANCELLED"
+
+        val now = System.currentTimeMillis()
+        val expiresAtTime = alert?.expiresAt?.time ?: ((alert?.createdAt?.time ?: now) + EmergencyAlertRepository.ALERT_LIFETIME_MS)
+        val diffMs = expiresAtTime - now
+        val isExpired = status == "EXPIRED" || diffMs <= 0L
+
+        // Timer calculation
+        var remainingSeconds by remember(reqId, expiresAtTime) { mutableStateOf(maxOf(0L, diffMs / 1000)) }
+        LaunchedEffect(expiresAtTime) {
+            while (true) {
+                val currentDiff = expiresAtTime - System.currentTimeMillis()
+                remainingSeconds = maxOf(0L, currentDiff / 1000)
+                if (remainingSeconds <= 0L) break
+                delay(1000L)
+            }
+        }
+        val minutes = remainingSeconds / 60
+        val seconds = remainingSeconds % 60
+        val countdownStr = String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
+
+        BackHandler(enabled = !isMinimized && (status == "ACTIVE" || status == "PENDING")) {
+            isMinimized = true
+        }
+
+        if (isMinimized) {
+            // Minimized Floating Status Card at the bottom
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isAccepted) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+                    modifier = Modifier.fillMaxWidth().clickable { isMinimized = false }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (isAccepted) "✅ Provider Accepted!" else "🚨 Waiting for provider",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = if (isAccepted) "Tap to view provider details" else "Provider response time remaining: $countdownStr",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Button(onClick = { isMinimized = false }) {
+                            Text("Open")
+                        }
+                    }
+                }
+            }
+        } else {
+            // Expanded Modal Bottom Sheet view
+            ModalBottomSheet(
+                onDismissRequest = {
+                    if (status != "ACTIVE" && status != "PENDING") {
+                        activeRequestId = null
+                    } else {
+                        isMinimized = true
+                    }
+                },
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp)
+                        .verticalScroll(rememberScrollState())
+                        .navigationBarsPadding(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = when {
+                                isAccepted -> "✅ Provider Accepted Your Request!"
+                                isDeclined -> "⚠️ Request Declined"
+                                isCancelled -> "⚠️ Request Cancelled"
+                                isExpired || remainingSeconds <= 0L -> "⚠️ Request Expired"
+                                else -> "Waiting for provider response"
+                            },
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            if (status == "ACTIVE" || status == "PENDING") {
+                                TextButton(onClick = { isMinimized = true }) {
+                                    Text("Minimize")
+                                }
+                            }
+                            TextButton(onClick = { activeRequestId = null }) {
+                                Text("Close")
+                            }
+                        }
+                    }
+
+                    when {
+                        isAccepted -> {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text("Provider: ${alert?.acceptedProviderName ?: "Provider"}", style = MaterialTheme.typography.titleMedium)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("Phone: ${alert?.acceptedProviderPhone ?: "N/A"}")
+                                    Text("Rating: 4.8 ⭐")
+                                    Text("Services: ${alert?.category ?: "General"}")
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text("The selected provider is on the way.")
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                if (!alert?.acceptedProviderPhone.isNullOrBlank()) {
+                                    Button(
+                                        onClick = { alert.acceptedProviderPhone.let { callProvider(it) } },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("📞 Call Provider")
+                                    }
+                                }
+                                if (alert?.location != null) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            context.openInMaps(alert.location!!.latitude, alert.location!!.longitude, alert.acceptedProviderName ?: "Provider")
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("🗺️ Open in Maps")
+                                    }
+                                }
+                            }
+                        }
+                        isDeclined -> {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "This provider declined the request.",
+                                    modifier = Modifier.padding(16.dp),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = { activeRequestId = null },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Choose Another Provider")
+                                }
+                                OutlinedButton(
+                                    onClick = {
+                                        activeRequestId = null
+                                        onBack()
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Call Provider")
+                                }
+                            }
+                        }
+                        isCancelled -> {
+                            Text("Request cancelled.")
+                            Button(
+                                onClick = { activeRequestId = null },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Return to Emergency Map")
+                            }
+                        }
+                        isExpired || remainingSeconds <= 0L -> {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "This request expired because the provider did not respond.",
+                                    modifier = Modifier.padding(16.dp),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                Button(
+                                    onClick = { activeRequestId = null },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Choose Another Provider")
+                                }
+                                OutlinedButton(
+                                    onClick = {
+                                        activeRequestId = null
+                                        onBack()
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Browse Nearby Providers")
+                                }
+                                TextButton(
+                                    onClick = {
+                                        activeRequestId = null
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Cancel / Close")
+                                }
+                            }
+                        }
+                        else -> {
+                            // ACTIVE / PENDING waiting state
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text("Waiting for provider response", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("Your request was sent to the selected provider.")
+                                    Text("The provider has been notified in their dashboard.")
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text("Service Category: ${alert?.category ?: uiState.selectedCategory}")
+                                    val timeFormat = SimpleDateFormat("hh:mm a", Locale.getDefault())
+                                    val createdAtStr = alert?.createdAt?.let { timeFormat.format(it) } ?: "Just now"
+                                    Text("Request created at: $createdAtStr")
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text("Provider response time remaining: $countdownStr", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator()
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Button(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        alertRepository.closeAlert(reqId)
+                                    }
+                                    activeRequestId = null
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Cancel Request")
                             }
                         }
                     }
@@ -340,10 +740,11 @@ private fun ProviderCard(
     item: ProviderWithDistance,
     isSelected: Boolean,
     onClick: () -> Unit,
+    onRequestHelp: () -> Unit,
     onCall: () -> Unit
 ) {
     val provider = item.provider
-    val distanceText = String.format(java.util.Locale.getDefault(), "%.1f", item.distanceKm)
+    val distanceText = String.format(Locale.getDefault(), "%.1f", item.distanceKm)
     val updatedText = when {
         item.minutesAgo < 1 -> "just now"
         item.minutesAgo < 60 -> "${item.minutesAgo} min ago"
@@ -388,15 +789,27 @@ private fun ProviderCard(
             )
 
             Spacer(modifier = Modifier.height(12.dp))
-            Button(
-                onClick = onCall,
-                enabled = provider.phoneNumber.isNotBlank(),
-                modifier = Modifier.fillMaxWidth()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    if (provider.phoneNumber.isBlank()) "No phone number"
-                    else "📞 Call ${provider.name}"
-                )
+                Button(
+                    onClick = onRequestHelp,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("🚨 Request Help")
+                }
+                OutlinedButton(
+                    onClick = onCall,
+                    enabled = provider.phoneNumber.isNotBlank(),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        if (provider.phoneNumber.isBlank()) "No phone"
+                        else "📞 Call"
+                    )
+                }
             }
         }
     }

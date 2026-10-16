@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import lk.ac.nibm.hdse.fixly_20.data.repository.EmergencyAlertRepository
 import lk.ac.nibm.hdse.fixly_20.data.repository.EmergencyRepository
+import lk.ac.nibm.hdse.fixly_20.data.repository.UserRepository
 import lk.ac.nibm.hdse.fixly_20.model.User
 import lk.ac.nibm.hdse.fixly_20.util.DistanceUtils
 
@@ -31,6 +32,7 @@ data class EmergencyUiState(
 class EmergencyViewModel(
     private val emergencyRepository: EmergencyRepository = EmergencyRepository(),
     private val alertRepository: EmergencyAlertRepository = EmergencyAlertRepository(),
+    private val userRepository: UserRepository = UserRepository(),
     private val firebaseAuth: FirebaseAuth = FirebaseAuth.getInstance()
 ) : ViewModel() {
 
@@ -56,6 +58,39 @@ class EmergencyViewModel(
 
     fun setRadius(km: Int) {
         _uiState.update { applyFilters(it.copy(radiusKm = km)) }
+    }
+
+    fun sendDirectRequest(
+        providerId: String,
+        distanceKm: Double,
+        note: String,
+        category: String,
+        onResult: (Result<String>) -> Unit
+    ) {
+        viewModelScope.launch {
+            val myLocation = _uiState.value.customerLocation
+            if (myLocation == null) {
+                onResult(Result.failure(IllegalStateException("Customer location not available")))
+                return@launch
+            }
+
+            val profile = userRepository.getCurrentUserProfile().getOrNull()
+            if (profile == null) {
+                onResult(Result.failure(IllegalStateException("User profile not found")))
+                return@launch
+            }
+
+            val result = alertRepository.sendDirectAlert(
+                customerName = profile.name,
+                customerPhone = profile.phoneNumber,
+                category = category,
+                note = note,
+                location = myLocation,
+                selectedProviderId = providerId,
+                distanceKm = distanceKm
+            )
+            onResult(result)
+        }
     }
 
     fun seedDemoProviders(onResult: (String) -> Unit) {

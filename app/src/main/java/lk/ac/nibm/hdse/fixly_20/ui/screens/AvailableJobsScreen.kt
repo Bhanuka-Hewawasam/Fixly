@@ -230,7 +230,7 @@ private fun EmergencyAvailabilityCard(
                         color = MaterialTheme.colorScheme.onErrorContainer
                     )
                     Text(
-                        "Customers nearby can find and call you. Your location is shared only while this is ON.",
+                        "Customers nearby can find and call you. Your location is shared only while this is ON.\nOnline emergency alerts are active while you are logged in and available.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onErrorContainer
                     )
