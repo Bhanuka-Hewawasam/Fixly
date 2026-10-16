@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import lk.ac.nibm.hdse.fixly_20.data.repository.EmergencyAlertRepository
 import lk.ac.nibm.hdse.fixly_20.data.repository.EmergencyRepository
 import lk.ac.nibm.hdse.fixly_20.model.User
 import lk.ac.nibm.hdse.fixly_20.util.DistanceUtils
@@ -29,6 +30,7 @@ data class EmergencyUiState(
 
 class EmergencyViewModel(
     private val emergencyRepository: EmergencyRepository = EmergencyRepository(),
+    private val alertRepository: EmergencyAlertRepository = EmergencyAlertRepository(),
     private val firebaseAuth: FirebaseAuth = FirebaseAuth.getInstance()
 ) : ViewModel() {
 
@@ -56,13 +58,34 @@ class EmergencyViewModel(
         _uiState.update { applyFilters(it.copy(radiusKm = km)) }
     }
 
+    fun seedDemoProviders(onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            alertRepository.seedDemoProviders()
+                .onSuccess { onResult("Successfully seeded 3 demo SOS providers.") }
+                .onFailure { onResult("Failed to seed: ${it.localizedMessage}") }
+        }
+    }
+
+    fun deleteDemoProviders(onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            alertRepository.deleteDemoProviders()
+                .onSuccess { onResult("Successfully deleted demo SOS providers.") }
+                .onFailure { onResult("Failed to delete: ${it.localizedMessage}") }
+        }
+    }
+
     private fun applyFilters(state: EmergencyUiState): EmergencyUiState {
         val myLocation = state.customerLocation ?: return state.copy(results = emptyList())
         val myUid = firebaseAuth.currentUser?.uid
+        val myEmail = firebaseAuth.currentUser?.email
         val now = System.currentTimeMillis()
 
         val results = state.allProviders.mapNotNull { provider ->
-            if (provider.uid == myUid) return@mapNotNull null // don't show yourself to yourself
+            // Robust self-exclusion: customer must never see themselves as a provider
+            if (myUid != null && provider.uid == myUid) return@mapNotNull null
+            if (myEmail != null && provider.email.isNotBlank() && provider.email.equals(myEmail, ignoreCase = true)) {
+                return@mapNotNull null
+            }
 
             val providerLocation = provider.lastLocation ?: return@mapNotNull null
             val sharedAt = provider.lastLocationAt ?: return@mapNotNull null

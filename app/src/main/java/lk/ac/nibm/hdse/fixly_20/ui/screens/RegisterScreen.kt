@@ -247,8 +247,10 @@ fun RegisterScreen(
                     OutlinedTextField(
                         value = phoneNumber,
                         onValueChange = {
-                            phoneNumber = it
-                            localError = null
+                            if (it.length <= 10 && it.all { char -> char.isDigit() }) {
+                                phoneNumber = it
+                                localError = null
+                            }
                         },
                         label = { Text("Phone Number") },
                         placeholder = { Text("0712345678") },
@@ -410,6 +412,8 @@ fun RegisterScreen(
                             localError = when {
                                 name.isBlank() || email.isBlank() || phoneNumber.isBlank() || password.isBlank() ->
                                     "Please fill in all details"
+                                phoneNumber.length != 10 ->
+                                    "Phone number must be exactly 10 digits"
                                 !email.contains("@") || !email.contains(".") ->
                                     "Please enter a valid email address"
                                 password.length < 6 ->

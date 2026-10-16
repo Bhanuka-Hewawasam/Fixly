@@ -4,6 +4,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -54,6 +55,7 @@ fun EmergencyScreen(
     var isLocating by remember { mutableStateOf(false) }
     var locationFailed by remember { mutableStateOf(false) }
     var selectedProvider by remember { mutableStateOf<ProviderWithDistance?>(null) }
+    var debugMsg by remember { mutableStateOf<String?>(null) }
 
     val customerLatLng = uiState.customerLocation?.let { LatLng(it.latitude, it.longitude) }
     val cameraPositionState = rememberCameraPositionState {
@@ -161,6 +163,42 @@ fun EmergencyScreen(
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             modifier = Modifier.padding(12.dp)
                         )
+                    }
+
+                    // --- DEBUG ONLY ACTIONS FOR TESTING ---
+                    val isDebug = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+                    if (isDebug) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text("🛠️ Debug Actions (DEV ONLY)", style = MaterialTheme.typography.titleSmall)
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Button(
+                                        onClick = { viewModel.seedDemoProviders { debugMsg = it } },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Seed Demo Providers", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                                    }
+                                    OutlinedButton(
+                                        onClick = { viewModel.deleteDemoProviders { debugMsg = it } },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Delete Demo Providers", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                                    }
+                                }
+                                debugMsg?.let { msg ->
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(msg, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                                }
+                            }
+                        }
                     }
 
                     Text(

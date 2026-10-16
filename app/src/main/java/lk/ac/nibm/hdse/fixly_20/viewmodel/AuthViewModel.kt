@@ -62,6 +62,10 @@ class AuthViewModel(
                 _uiState.value = _uiState.value.copy(errorMessage = "Please fill in all fields")
                 return
             }
+            phoneNumber.length != 10 -> {
+                _uiState.value = _uiState.value.copy(errorMessage = "Phone number must be exactly 10 digits")
+                return
+            }
             password != confirmPassword -> {
                 _uiState.value = _uiState.value.copy(errorMessage = "Passwords don't match")
                 return
@@ -123,6 +127,10 @@ class AuthViewModel(
     ) {
         if (phoneNumber.isBlank()) {
             _uiState.value = _uiState.value.copy(errorMessage = "Please enter your phone number")
+            return
+        }
+        if (phoneNumber.length != 10) {
+            _uiState.value = _uiState.value.copy(errorMessage = "Phone number must be exactly 10 digits")
             return
         }
         if (roles.contains("provider") && serviceCategories.isEmpty()) {

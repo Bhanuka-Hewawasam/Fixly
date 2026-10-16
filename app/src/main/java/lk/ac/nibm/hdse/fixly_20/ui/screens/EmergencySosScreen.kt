@@ -2,6 +2,7 @@ package lk.ac.nibm.hdse.fixly_20.ui.screens
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -116,6 +117,8 @@ fun EmergencySosScreen(
                 category = category,
                 onCategoryChange = { category = it },
                 errorMessage = uiState.errorMessage,
+                uiState = uiState,
+                viewModel = viewModel,
                 onSend = { onSendClicked() },
                 onBrowseProviders = onBrowseProviders
             )
@@ -132,9 +135,14 @@ private fun SendAlertContent(
     category: String,
     onCategoryChange: (String) -> Unit,
     errorMessage: String?,
+    uiState: lk.ac.nibm.hdse.fixly_20.viewmodel.EmergencySosUiState,
+    viewModel: EmergencySosViewModel,
     onSend: () -> Unit,
     onBrowseProviders: () -> Unit
 ) {
+    val context = LocalContext.current
+    val isDebug = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -234,6 +242,41 @@ private fun SendAlertContent(
         TextButton(onClick = onBrowseProviders) {
             Text("Rather browse nearby providers yourself?")
         }
+
+        // --- DEBUG ONLY ACTIONS FOR TESTING ---
+        if (isDebug) {
+            Spacer(modifier = Modifier.height(24.dp))
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text("🛠️ Debug Actions (DEV ONLY)", style = MaterialTheme.typography.titleSmall)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = viewModel::seedDemoProviders,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Seed SOS Demo Providers", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                        }
+                        OutlinedButton(
+                            onClick = viewModel::deleteDemoProviders,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Delete Demo Providers", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                        }
+                    }
+                    uiState.debugMessage?.let { msg ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(msg, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -325,7 +368,8 @@ private fun ResponseCard(response: EmergencyResponse, onCall: () -> Unit) {
             Text(response.providerName, style = MaterialTheme.typography.titleMedium)
             Text(
                 formatRating(response.providerRating, response.providerReviewCount),
-                style = MaterialTheme.typography.bodySmall
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             response.distanceKm?.let { distance ->

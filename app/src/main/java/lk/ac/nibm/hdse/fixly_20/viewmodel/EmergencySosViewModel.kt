@@ -19,7 +19,8 @@ data class EmergencySosUiState(
     val myAlert: EmergencyAlert? = null,              // the customer's live alert, if any
     val responses: List<EmergencyResponse> = emptyList(), // providers who said "I can help"
     val isSending: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val debugMessage: String? = null                  // status message from seed/delete actions
 )
 
 class EmergencySosViewModel(
@@ -106,5 +107,27 @@ class EmergencySosViewModel(
 
     fun showError(message: String) {
         _uiState.update { it.copy(errorMessage = message) }
+    }
+
+    fun seedDemoProviders() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(debugMessage = "Seeding demo providers...") }
+            alertRepository.seedDemoProviders()
+                .onSuccess { _uiState.update { it.copy(debugMessage = "Successfully seeded 3 demo SOS providers.") } }
+                .onFailure { e -> _uiState.update { it.copy(debugMessage = "Failed to seed: ${e.localizedMessage}") } }
+        }
+    }
+
+    fun deleteDemoProviders() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(debugMessage = "Deleting demo providers...") }
+            alertRepository.deleteDemoProviders()
+                .onSuccess { _uiState.update { it.copy(debugMessage = "Successfully deleted demo SOS providers.") } }
+                .onFailure { e -> _uiState.update { it.copy(debugMessage = "Failed to delete: ${e.localizedMessage}") } }
+        }
+    }
+
+    fun clearDebugMessage() {
+        _uiState.update { it.copy(debugMessage = null) }
     }
 }

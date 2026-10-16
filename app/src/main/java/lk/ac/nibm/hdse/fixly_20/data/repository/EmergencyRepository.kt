@@ -18,6 +18,7 @@ class EmergencyRepository(
     /**
      * Provider opts in/out of emergency searches.
      * When switching ON (or refreshing), their current location + timestamp are saved on their profile.
+     * When switching OFF, their location and timestamp are cleared.
      */
     suspend fun setAvailability(available: Boolean, location: GeoPoint?): Result<Unit> {
         return try {
@@ -28,6 +29,9 @@ class EmergencyRepository(
             if (available && location != null) {
                 updates["lastLocation"] = location
                 updates["lastLocationAt"] = FieldValue.serverTimestamp()
+            } else {
+                updates["lastLocation"] = FieldValue.delete()
+                updates["lastLocationAt"] = FieldValue.delete()
             }
 
             firestore.collection("users").document(uid).update(updates).await()

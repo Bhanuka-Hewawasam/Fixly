@@ -124,8 +124,10 @@ fun CompleteProfileScreen(
                 OutlinedTextField(
                     value = phoneNumber,
                     onValueChange = {
-                        phoneNumber = it
-                        localError = null
+                        if (it.length <= 10 && it.all { char -> char.isDigit() }) {
+                            phoneNumber = it
+                            localError = null
+                        }
                     },
                     label = { Text("Phone Number") },
                     placeholder = { Text("0712345678") },
@@ -330,6 +332,10 @@ fun CompleteProfileScreen(
                     onClick = {
                         if (phoneNumber.isBlank()) {
                             localError = "Please enter your phone number"
+                            return@Button
+                        }
+                        if (phoneNumber.length != 10) {
+                            localError = "Phone number must be exactly 10 digits"
                             return@Button
                         }
                         val categories = selectedCategories.filter { it.value }.keys.toList()

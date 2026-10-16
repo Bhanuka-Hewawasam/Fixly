@@ -1,6 +1,8 @@
 package lk.ac.nibm.hdse.fixly_20.data.repository
 
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldPath
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.GeoPoint
 import kotlinx.coroutines.channels.awaitClose
@@ -136,6 +138,131 @@ class EmergencyAlertRepository(
     suspend fun closeAlert(alertId: String): Result<Unit> {
         return try {
             alerts.document(alertId).update("status", "Closed").await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /** DEV-ONLY: Seed demo providers (1 through 6) for testing SOS and Emergency Map */
+    suspend fun seedDemoProviders(): Result<Unit> {
+        return try {
+            val batch = firestore.batch()
+
+            val p1 = mapOf(
+                "uid" to "demo_sos_provider_1",
+                "name" to "Colombo Auto Care",
+                "email" to "demo_sos_provider_1@example.com",
+                "phoneNumber" to "0771234567",
+                "roles" to listOf("provider"),
+                "serviceCategories" to listOf("Electrical", "Other"),
+                "ratingSum" to 45.0,
+                "ratingCount" to 10,
+                "emergencyAvailable" to true,
+                "lastLocation" to GeoPoint(6.9271, 79.8612),
+                "lastLocationAt" to FieldValue.serverTimestamp(),
+                "isVerified" to true
+            )
+            val p2 = mapOf(
+                "uid" to "demo_sos_provider_2",
+                "name" to "Dehiwala Towing Service",
+                "email" to "demo_sos_provider_2@example.com",
+                "phoneNumber" to "0772345678",
+                "roles" to listOf("provider"),
+                "serviceCategories" to listOf("Other", "Electrical"),
+                "ratingSum" to 40.0,
+                "ratingCount" to 8,
+                "emergencyAvailable" to true,
+                "lastLocation" to GeoPoint(6.8500, 79.8650),
+                "lastLocationAt" to FieldValue.serverTimestamp(),
+                "isVerified" to true
+            )
+            val p3 = mapOf(
+                "uid" to "demo_sos_provider_3",
+                "name" to "Rajagiriya Emergency Repair",
+                "email" to "demo_sos_provider_3@example.com",
+                "phoneNumber" to "0773456789",
+                "roles" to listOf("provider"),
+                "serviceCategories" to listOf("Electrical", "Other"),
+                "ratingSum" to 47.5,
+                "ratingCount" to 10,
+                "emergencyAvailable" to true,
+                "lastLocation" to GeoPoint(6.9065, 79.8950),
+                "lastLocationAt" to FieldValue.serverTimestamp(),
+                "isVerified" to true
+            )
+            val p4 = mapOf(
+                "uid" to "demo_sos_provider_4",
+                "name" to "Dambadeniya Roadside Care",
+                "email" to "demo_sos_provider_4@example.com",
+                "phoneNumber" to "0774567890",
+                "roles" to listOf("provider"),
+                "serviceCategories" to listOf("Electrical", "Other"),
+                "ratingSum" to 42.0,
+                "ratingCount" to 9,
+                "emergencyAvailable" to true,
+                "lastLocation" to GeoPoint(7.3675, 80.1615),
+                "lastLocationAt" to FieldValue.serverTimestamp(),
+                "isVerified" to true
+            )
+            val p5 = mapOf(
+                "uid" to "demo_sos_provider_5",
+                "name" to "Kurunegala Auto Rescue",
+                "email" to "demo_sos_provider_5@example.com",
+                "phoneNumber" to "0775678901",
+                "roles" to listOf("provider"),
+                "serviceCategories" to listOf("Electrical", "Other"),
+                "ratingSum" to 46.0,
+                "ratingCount" to 10,
+                "emergencyAvailable" to true,
+                "lastLocation" to GeoPoint(7.4863, 80.3623),
+                "lastLocationAt" to FieldValue.serverTimestamp(),
+                "isVerified" to true
+            )
+            val p6 = mapOf(
+                "uid" to "demo_sos_provider_6",
+                "name" to "Kuliyapitiya Vehicle Help",
+                "email" to "demo_sos_provider_6@example.com",
+                "phoneNumber" to "0776789012",
+                "roles" to listOf("provider"),
+                "serviceCategories" to listOf("Electrical", "Other"),
+                "ratingSum" to 43.5,
+                "ratingCount" to 9,
+                "emergencyAvailable" to true,
+                "lastLocation" to GeoPoint(7.4688, 80.0401),
+                "lastLocationAt" to FieldValue.serverTimestamp(),
+                "isVerified" to true
+            )
+
+            batch.set(firestore.collection("users").document("demo_sos_provider_1"), p1)
+            batch.set(firestore.collection("users").document("demo_sos_provider_2"), p2)
+            batch.set(firestore.collection("users").document("demo_sos_provider_3"), p3)
+            batch.set(firestore.collection("users").document("demo_sos_provider_4"), p4)
+            batch.set(firestore.collection("users").document("demo_sos_provider_5"), p5)
+            batch.set(firestore.collection("users").document("demo_sos_provider_6"), p6)
+
+            batch.commit().await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /** DEV-ONLY: Delete only demo providers starting with demo_sos_provider_ */
+    suspend fun deleteDemoProviders(): Result<Unit> {
+        return try {
+            val snapshot = firestore.collection("users")
+                .whereGreaterThanOrEqualTo(FieldPath.documentId(), "demo_sos_provider_")
+                .whereLessThanOrEqualTo(FieldPath.documentId(), "demo_sos_provider_\uf8ff")
+                .get().await()
+
+            val batch = firestore.batch()
+            for (doc in snapshot.documents) {
+                if (doc.id.startsWith("demo_sos_provider_")) {
+                    batch.delete(doc.reference)
+                }
+            }
+            batch.commit().await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
