@@ -1,6 +1,7 @@
 package lk.ac.nibm.hdse.fixly_20.ui.screens
 
 import android.net.Uri
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -29,6 +30,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.SubcomposeAsyncImage
+import kotlinx.coroutines.delay
+import lk.ac.nibm.hdse.fixly_20.BuildConfig
+import lk.ac.nibm.hdse.fixly_20.data.repository.EmergencyAlertRepository
 import lk.ac.nibm.hdse.fixly_20.ui.components.CategoryCard
 import lk.ac.nibm.hdse.fixly_20.ui.components.EmergencyChip
 import lk.ac.nibm.hdse.fixly_20.ui.components.FixlyBottomNavBar
@@ -37,7 +41,9 @@ import lk.ac.nibm.hdse.fixly_20.ui.components.FixlyTopBar
 import lk.ac.nibm.hdse.fixly_20.ui.components.MechanicIllustrationPanel
 import lk.ac.nibm.hdse.fixly_20.ui.theme.ThemeState
 import lk.ac.nibm.hdse.fixly_20.util.dialNumber
+import lk.ac.nibm.hdse.fixly_20.util.openInMaps
 import lk.ac.nibm.hdse.fixly_20.viewmodel.HomeViewModel
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,6 +61,7 @@ fun HomeScreen(
 
     var showProfileSheet by remember { mutableStateOf(false) }
     var showNotificationsSheet by remember { mutableStateOf(false) }
+    var showClearConfirmDialog by remember { mutableStateOf(false) }
     var selectedNotification by remember { mutableStateOf<lk.ac.nibm.hdse.fixly_20.model.ProviderNotification?>(null) }
     val unreadCount = uiState.notifications.count { !it.isRead }
 
@@ -168,6 +175,158 @@ fun HomeScreen(
 
                     Spacer(modifier = Modifier.height(20.dp))
                 }
+            }
+        }
+
+        // --- PERSISTENT MINIMIZED ACTIVE REQUEST CARD FOR CUSTOMER ON HOME ---
+        val activeAlert = uiState.activeCustomerAlert
+        if (uiState.activeRole == "customer" && activeAlert != null && activeAlert.status != "EXPIRED") {
+            val status = activeAlert.status
+            val isAccepted = status == "ACCEPTED"
+            val now = System.currentTimeMillis()
+            val expiresAtTime = activeAlert.expiresAt?.time ?: ((activeAlert.createdAt?.time ?: now) + EmergencyAlertRepository.ALERT_LIFETIME_MS)
+            val diffMs = expiresAtTime - now
+            var remainingSeconds by remember(activeAlert.alertId, expiresAtTime) { mutableStateOf(maxOf(0L, diffMs / 1000)) }
+
+            LaunchedEffect(expiresAtTime) {
+                while (true) {
+                    val currentDiff = expiresAtTime - System.currentTimeMillis()
+                    remainingSeconds = maxOf(0L, currentDiff / 1000)
+                    if (remainingSeconds <= 0L) break
+                    delay(1000L)
+                }
+            }
+            val minutes = remainingSeconds / 60
+            val seconds = remainingSeconds % 60
+            val countdownStr = String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
+
+            var showExpandedDialog by remember { mutableStateOf(false) }
+
+            if (BuildConfig.DEBUG) {
+                LaunchedEffect(activeAlert.alertId) {
+                    Log.d("HomeScreen", "DEBUG: minimized card shown/hidden - isMinimized: true, alertId: ${activeAlert.alertId}")
+                    Log.d("HomeScreen", "DEBUG: countdown recalculation - remaining: $remainingSeconds")
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isAccepted) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showExpandedDialog = true }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (isAccepted) "✅ Provider accepted your request" else "🚨 Waiting for provider response",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = if (isAccepted) "Provider: ${activeAlert.acceptedProviderName ?: "Accepted"}" else "${activeAlert.category} • $countdownStr remaining",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { showExpandedDialog = true }) {
+                                Text("Open")
+                            }
+                            if (!isAccepted) {
+                                OutlinedButton(
+                                    onClick = { viewModel.cancelActiveAlert(activeAlert.alertId) }
+                                ) {
+                                    Text("Cancel")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (showExpandedDialog) {
+                AlertDialog(
+                    onDismissRequest = { showExpandedDialog = false },
+                    title = {
+                        Text(
+                            text = if (isAccepted) "✅ Provider Accepted Your Request!" else "🚨 Emergency Request Pending"
+                        )
+                    },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (isAccepted) {
+                                Text("Provider: ${activeAlert.acceptedProviderName ?: "Provider"}", style = MaterialTheme.typography.titleMedium)
+                                Text("Phone: ${activeAlert.acceptedProviderPhone ?: "N/A"}")
+                                Text("Rating: 4.8 ⭐")
+                                Text("Services: ${activeAlert.category}")
+                                Text("The selected provider is on the way.")
+                            } else {
+                                Text("Your request was sent to the selected provider.")
+                                Text("The provider has been notified in their dashboard.")
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("Service Category: ${activeAlert.category}")
+                                Text("Provider response time remaining: $countdownStr", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (isAccepted) {
+                                if (!activeAlert.acceptedProviderPhone.isNullOrBlank()) {
+                                    Button(
+                                        onClick = { context.dialNumber(activeAlert.acceptedProviderPhone) },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("📞 Call")
+                                    }
+                                }
+                                if (activeAlert.location != null) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            context.openInMaps(activeAlert.location.latitude, activeAlert.location.longitude, activeAlert.acceptedProviderName ?: "Provider")
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("🗺️ Maps")
+                                    }
+                                }
+                            } else {
+                                Button(
+                                    onClick = {
+                                        viewModel.cancelActiveAlert(activeAlert.alertId)
+                                        showExpandedDialog = false
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Cancel Request")
+                                }
+                            }
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showExpandedDialog = false }) {
+                            Text("Close")
+                        }
+                    }
+                )
             }
         }
 
@@ -422,8 +581,15 @@ fun HomeScreen(
                             text = "🚨 Emergency Notifications",
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                         )
-                        TextButton(onClick = { showNotificationsSheet = false }) {
-                            Text("Close")
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            if (uiState.notifications.isNotEmpty()) {
+                                TextButton(onClick = { showClearConfirmDialog = true }) {
+                                    Text("Clear Notifications")
+                                }
+                            }
+                            TextButton(onClick = { showNotificationsSheet = false }) {
+                                Text("Close")
+                            }
                         }
                     }
 
@@ -498,7 +664,7 @@ fun HomeScreen(
                                             horizontalArrangement = Arrangement.SpaceBetween
                                         ) {
                                             Text(
-                                                text = "Service: ${notif.serviceType} • ${String.format(java.util.Locale.getDefault(), "%.1f", notif.distanceKm)} km away",
+                                                text = "Service: ${notif.serviceType} • ${String.format(Locale.getDefault(), "%.1f", notif.distanceKm)} km away",
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.primary
                                             )
@@ -524,7 +690,7 @@ fun HomeScreen(
                                             }
                                             OutlinedButton(
                                                 onClick = {
-                                                    viewModel.declineAlert(notif.notificationId)
+                                                    viewModel.declineAlert(notif.notificationId, notif.alertId)
                                                 },
                                                 modifier = Modifier.weight(1f)
                                             ) {
@@ -540,6 +706,30 @@ fun HomeScreen(
             }
         }
 
+        if (showClearConfirmDialog) {
+            AlertDialog(
+                onDismissRequest = { showClearConfirmDialog = false },
+                title = { Text("Clear Notifications") },
+                text = { Text("Are you sure you want to clear all read, accepted, declined, and closed notifications? Active unread requests will be kept.") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.clearProviderNotifications()
+                            showClearConfirmDialog = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Clear")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showClearConfirmDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
         selectedNotification?.let { notif ->
             AlertDialog(
                 onDismissRequest = { selectedNotification = null },
@@ -548,7 +738,7 @@ fun HomeScreen(
                     Column {
                         Text("Service: ${notif.serviceType}", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text("Distance: ${String.format(java.util.Locale.getDefault(), "%.1f", notif.distanceKm)} km away", style = MaterialTheme.typography.bodySmall)
+                        Text("Distance: ${String.format(Locale.getDefault(), "%.1f", notif.distanceKm)} km away", style = MaterialTheme.typography.bodySmall)
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(notif.body, style = MaterialTheme.typography.bodyMedium)
                     }

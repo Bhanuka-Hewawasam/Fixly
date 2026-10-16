@@ -2,14 +2,17 @@ package lk.ac.nibm.hdse.fixly_20.viewmodel
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import lk.ac.nibm.hdse.fixly_20.BuildConfig
 import lk.ac.nibm.hdse.fixly_20.data.repository.AuthRepository
 import lk.ac.nibm.hdse.fixly_20.data.repository.EmergencyAlertRepository
 import lk.ac.nibm.hdse.fixly_20.data.repository.UserRepository
+import lk.ac.nibm.hdse.fixly_20.model.EmergencyAlert
 import lk.ac.nibm.hdse.fixly_20.model.ProviderNotification
 import lk.ac.nibm.hdse.fixly_20.model.User
 
@@ -18,6 +21,7 @@ data class HomeUiState(
     val user: User? = null,
     val activeRole: String = "customer", // which tab/view is currently shown
     val notifications: List<ProviderNotification> = emptyList(),
+    val activeCustomerAlert: EmergencyAlert? = null,
     val errorMessage: String? = null
 )
 
@@ -49,6 +53,7 @@ class HomeViewModel(
                         activeRole = defaultRole
                     )
                     observeNotifications(user.uid)
+                    observeCustomerActiveAlert()
                 }
                 .onFailure { exception ->
                     _uiState.value = _uiState.value.copy(
@@ -64,6 +69,23 @@ class HomeViewModel(
             alertRepository.observeProviderNotifications(providerId).collect { notifs ->
                 _uiState.value = _uiState.value.copy(notifications = notifs)
             }
+        }
+    }
+
+    private fun observeCustomerActiveAlert() {
+        viewModelScope.launch {
+            alertRepository.observeMyActiveAlert().collect { alert ->
+                _uiState.value = _uiState.value.copy(activeCustomerAlert = alert)
+            }
+        }
+    }
+
+    fun cancelActiveAlert(alertId: String) {
+        viewModelScope.launch {
+            if (BuildConfig.DEBUG) {
+                Log.d("HomeViewModel", "DEBUG: request cancellation for alertId: $alertId")
+            }
+            alertRepository.closeAlert(alertId)
         }
     }
 
@@ -86,9 +108,21 @@ class HomeViewModel(
         }
     }
 
-    fun declineAlert(notificationId: String) {
+    fun declineAlert(notificationId: String, alertId: String) {
         viewModelScope.launch {
-            alertRepository.updateNotificationStatus(notificationId, "DECLINED")
+            val user = _uiState.value.user
+            if (user != null) {
+                alertRepository.declineAlert(alertId, user.uid, notificationId)
+            }
+        }
+    }
+
+    fun clearProviderNotifications() {
+        viewModelScope.launch {
+            val user = _uiState.value.user
+            if (user != null) {
+                alertRepository.clearClearedNotifications(user.uid)
+            }
         }
     }
 
