@@ -10,24 +10,28 @@ import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.maps.model.CameraPosition
@@ -48,7 +52,15 @@ import lk.ac.nibm.hdse.fixly_20.viewmodel.ProviderWithDistance
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-private val categoryFilters = listOf("Any", "Plumbing", "Electrical", "Cleaning", "Other")
+private val categoryFilters = listOf(
+    "Any Available Provider",
+    "Vehicle Mechanic",
+    "Electrician",
+    "Plumber",
+    "AC Technician",
+    "Computer Technician",
+    "Other"
+)
 private val radiusOptionsKm = listOf(5, 10, 25, 50)
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -80,6 +92,7 @@ fun EmergencyScreen(
     var requestErrorMessage by remember { mutableStateOf<String?>(null) }
     var isSendingRequest by remember { mutableStateOf(false) }
     var isMinimized by remember { mutableStateOf(false) }
+    var showCancelConfirmation by remember { mutableStateOf(false) }
 
     // Automatically bind to existing active alert if customer returns to Emergency
     LaunchedEffect(myActiveAlertFlow) {
@@ -420,7 +433,13 @@ fun EmergencyScreen(
                             providerId = item.provider.uid,
                             distanceKm = item.distanceKm,
                             note = requestNote,
-                            category = uiState.selectedCategory
+                            category = when (uiState.selectedCategory) {
+                                "Any Available Provider" -> "Any"
+                                "Electrician" -> "Electrical"
+                                "Plumber" -> "Plumbing"
+                                "AC Technician" -> "AC Repair"
+                                else -> uiState.selectedCategory
+                            }
                         ) { result ->
                             isSendingRequest = false
                             result.onSuccess { alertId ->
@@ -457,6 +476,7 @@ fun EmergencyScreen(
         val isAccepted = status == "ACCEPTED"
         val isDeclined = status == "DECLINED"
         val isCancelled = status == "CANCELLED"
+        val isClosed = status == "CLOSED"
 
         val now = System.currentTimeMillis()
         val expiresAtTime = alert?.expiresAt?.time ?: ((alert?.createdAt?.time ?: now) + EmergencyAlertRepository.ALERT_LIFETIME_MS)
@@ -549,6 +569,7 @@ fun EmergencyScreen(
                                 isAccepted -> "✅ Provider Accepted Your Request!"
                                 isDeclined -> "⚠️ Request Declined"
                                 isCancelled -> "⚠️ Request Cancelled"
+                                isClosed -> "Request closed"
                                 isExpired || remainingSeconds <= 0L -> "⚠️ Request Expired"
                                 else -> "Waiting for provider response"
                             },
@@ -576,10 +597,8 @@ fun EmergencyScreen(
                                     Text("Provider: ${alert?.acceptedProviderName ?: "Provider"}", style = MaterialTheme.typography.titleMedium)
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text("Phone: ${alert?.acceptedProviderPhone ?: "N/A"}")
-                                    Text("Rating: 4.8 ⭐")
+                                    Text("Your provider is on the way.")
                                     Text("Services: ${alert?.category ?: "General"}")
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text("The selected provider is on the way.")
                                 }
                             }
 
@@ -606,6 +625,33 @@ fun EmergencyScreen(
                                         Text("🗺️ Open in Maps")
                                     }
                                 }
+                            }
+                            OutlinedButton(
+                                onClick = { showCancelConfirmation = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text("Close request") }
+                            if (showCancelConfirmation) {
+                                AlertDialog(
+                                    onDismissRequest = { showCancelConfirmation = false },
+                                    title = { Text("Close this request?") },
+                                    text = { Text("This will mark the accepted emergency request as closed.") },
+                                    confirmButton = {
+                                        TextButton(
+                                            onClick = {
+                                                showCancelConfirmation = false
+                                                coroutineScope.launch {
+                                                    alertRepository.finishAcceptedAlert(reqId)
+                                                        .onFailure { requestErrorMessage = it.localizedMessage }
+                                                }
+                                            }
+                                        ) { Text("Close request") }
+                                    },
+                                    dismissButton = {
+                                        TextButton(onClick = { showCancelConfirmation = false }) {
+                                            Text("Keep request")
+                                        }
+                                    }
+                                )
                             }
                         }
                         isDeclined -> {
@@ -649,6 +695,13 @@ fun EmergencyScreen(
                             ) {
                                 Text("Return to Emergency Map")
                             }
+                        }
+                        isClosed -> {
+                            Text("This emergency request is closed.")
+                            Button(
+                                onClick = { activeRequestId = null },
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text("Return to Emergency Map") }
                         }
                         isExpired || remainingSeconds <= 0L -> {
                             Card(
@@ -715,17 +768,49 @@ fun EmergencyScreen(
                             }
                             Spacer(modifier = Modifier.height(12.dp))
 
-                            Button(
-                                onClick = {
-                                    coroutineScope.launch {
-                                        alertRepository.closeAlert(reqId)
+                            if (status == "ACTIVE") {
+                                OutlinedButton(
+                                    onClick = { showCancelConfirmation = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("Cancel emergency request") }
+                            } else if (isAccepted) {
+                                Button(
+                                    onClick = { showCancelConfirmation = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("Close request") }
+                            }
+
+                            if (showCancelConfirmation) {
+                                AlertDialog(
+                                    onDismissRequest = { showCancelConfirmation = false },
+                                    title = { Text(if (isAccepted) "Close this request?" else "Cancel emergency request?") },
+                                    text = {
+                                        Text(
+                                            if (isAccepted) "This will mark the accepted request as closed."
+                                            else "Nearby providers will no longer be able to accept it."
+                                        )
+                                    },
+                                    confirmButton = {
+                                        TextButton(
+                                            onClick = {
+                                                showCancelConfirmation = false
+                                                coroutineScope.launch {
+                                                    val result = if (isAccepted) {
+                                                        alertRepository.finishAcceptedAlert(reqId)
+                                                    } else {
+                                                        alertRepository.closeAlert(reqId)
+                                                    }
+                                                    result.onFailure { requestErrorMessage = it.localizedMessage }
+                                                }
+                                            }
+                                        ) { Text(if (isAccepted) "Close request" else "Cancel request") }
+                                    },
+                                    dismissButton = {
+                                        TextButton(onClick = { showCancelConfirmation = false }) {
+                                            Text("Keep request")
+                                        }
                                     }
-                                    activeRequestId = null
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("Cancel Request")
+                                )
                             }
                         }
                     }
@@ -764,19 +849,39 @@ private fun ProviderCard(
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(provider.name, style = MaterialTheme.typography.titleMedium)
-                if (provider.certificateUrl != null) {
-                    AssistChip(onClick = {}, label = { Text("📄 Certificate") })
+                Box(
+                    modifier = Modifier.size(48.dp).clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        provider.name.firstOrNull()?.uppercase() ?: "?",
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    if (!provider.profilePictureUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = provider.profilePictureUrl,
+                            contentDescription = "${provider.name} profile photo",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                        )
+                    }
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(provider.name, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        formatRating(provider.averageRating, provider.ratingCount),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                if (provider.isVerified) {
+                    AssistChip(onClick = {}, label = { Text("Verified") })
                 }
             }
-
-            Text(
-                formatRating(provider.averageRating, provider.ratingCount),
-                style = MaterialTheme.typography.bodySmall
-            )
 
             Spacer(modifier = Modifier.height(6.dp))
             Text(
@@ -784,7 +889,7 @@ private fun ProviderCard(
                 style = MaterialTheme.typography.bodyMedium
             )
             Text(
-                "📍 $distanceText km away • location updated $updatedText",
+                "$distanceText km away • location updated $updatedText",
                 style = MaterialTheme.typography.bodySmall
             )
 
@@ -798,7 +903,7 @@ private fun ProviderCard(
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("🚨 Request Help")
+                    Text("Send Emergency Request")
                 }
                 OutlinedButton(
                     onClick = onCall,
@@ -806,8 +911,8 @@ private fun ProviderCard(
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(
-                        if (provider.phoneNumber.isBlank()) "No phone"
-                        else "📞 Call"
+                        if (provider.phoneNumber.isBlank()) "Call after acceptance"
+                        else "Call"
                     )
                 }
             }

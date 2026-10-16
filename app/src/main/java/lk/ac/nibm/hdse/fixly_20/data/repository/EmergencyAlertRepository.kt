@@ -12,8 +12,10 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import lk.ac.nibm.hdse.fixly_20.BuildConfig
 import lk.ac.nibm.hdse.fixly_20.model.EmergencyAlert
+import lk.ac.nibm.hdse.fixly_20.model.EmergencyAlertPolicy
 import lk.ac.nibm.hdse.fixly_20.model.EmergencyResponse
 import lk.ac.nibm.hdse.fixly_20.model.ProviderNotification
+import lk.ac.nibm.hdse.fixly_20.util.DistanceUtils
 import java.util.Date
 import java.util.Locale
 
@@ -24,9 +26,7 @@ class EmergencyAlertRepository(
 
     private val alerts = firestore.collection("emergencyAlerts")
 
-    /**
-     * Customer sends a broadcast emergency alert.
-     */
+    /** Creates one live alert per customer, atomically, so repeated taps cannot create duplicates. */
     suspend fun sendAlert(
         customerName: String,
         customerPhone: String,
@@ -34,53 +34,7 @@ class EmergencyAlertRepository(
         note: String,
         location: GeoPoint
     ): Result<String> {
-        return try {
-            val customerId = firebaseAuth.currentUser?.uid
-                ?: return Result.failure(IllegalStateException("No logged-in user"))
-
-            val existing = alerts
-                .whereEqualTo("customerId", customerId)
-                .whereEqualTo("status", "ACTIVE")
-                .get().await()
-
-            val now = System.currentTimeMillis()
-            val hasLiveAlert = existing.documents.any { doc ->
-                val expiresAt = doc.getDate("expiresAt")?.time ?: (doc.getDate("createdAt")?.time?.plus(ALERT_LIFETIME_MS) ?: now)
-                now < expiresAt
-            }
-            if (hasLiveAlert) {
-                return Result.failure(IllegalStateException("You already have a live emergency alert"))
-            }
-
-            existing.documents.forEach { it.reference.update("status", "CANCELLED").await() }
-
-            val ref = alerts.document()
-            val createdAtDate = Date()
-            val expiresAtDate = Date(createdAtDate.time + ALERT_LIFETIME_MS)
-
-            ref.set(
-                EmergencyAlert(
-                    alertId = ref.id,
-                    customerId = customerId,
-                    customerName = customerName,
-                    customerPhone = customerPhone,
-                    category = category,
-                    note = note,
-                    location = location,
-                    status = "ACTIVE",
-                    createdAt = createdAtDate,
-                    expiresAt = expiresAtDate
-                )
-            ).await()
-
-            if (BuildConfig.DEBUG) {
-                Log.d(TAG, "DEBUG: request created - alertId: ${ref.id}, customerId: $customerId")
-            }
-
-            Result.success(ref.id)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+        return createAlert(customerName, customerPhone, category, note, location, null)
     }
 
     /**
@@ -95,74 +49,74 @@ class EmergencyAlertRepository(
         selectedProviderId: String,
         distanceKm: Double
     ): Result<String> {
-        return try {
-            val customerId = firebaseAuth.currentUser?.uid
-                ?: return Result.failure(IllegalStateException("No logged-in user"))
-
-            if (BuildConfig.DEBUG) {
-                Log.d(TAG, "DEBUG: 2. Current customer UID: $customerId")
-                Log.d(TAG, "DEBUG: Selected provider UID: $selectedProviderId")
-            }
-
-            val ref = alerts.document()
-            val alertPath = "emergencyAlerts/${ref.id}"
-            val createdAtDate = Date()
-            val expiresAtDate = Date(createdAtDate.time + ALERT_LIFETIME_MS)
-
-            val alert = EmergencyAlert(
-                alertId = ref.id,
-                customerId = customerId,
-                customerName = customerName,
-                customerPhone = customerPhone,
-                category = category,
-                note = note,
-                location = location,
-                status = "ACTIVE",
-                createdAt = createdAtDate,
-                expiresAt = expiresAtDate,
-                selectedProviderId = selectedProviderId
-            )
-
-            if (BuildConfig.DEBUG) {
-                Log.d(TAG, "DEBUG: 3. Notification alertId/requestId: ${ref.id}")
-                Log.d(TAG, "DEBUG: 4. Firestore request document path: $alertPath")
-                Log.d(TAG, "DEBUG: Request document fields: $alert")
-            }
-
-            ref.set(alert).await()
-
-            val notifId = "${ref.id}_$selectedProviderId"
-            val notifPath = "providerNotifications/$notifId"
-            val notifRef = firestore.collection("providerNotifications").document(notifId)
-            val notification = ProviderNotification(
-                notificationId = notifId,
-                providerId = selectedProviderId,
-                alertId = ref.id,
-                type = "EMERGENCY_ALERT",
-                title = "🚨 Direct Request from $customerName",
-                body = note.ifBlank { "Customer needs urgent help ($category)." },
-                serviceType = category,
-                distanceKm = distanceKm,
-                isRead = false,
-                status = "ACTIVE"
-            )
-
-            if (BuildConfig.DEBUG) {
-                Log.d(TAG, "DEBUG: 5. Provider notification document path: $notifPath")
-            }
-
-            notifRef.set(notification).await()
-
-            Result.success(ref.id)
-        } catch (e: Exception) {
-            if (BuildConfig.DEBUG) {
-                Log.e(TAG, "DEBUG: sendDirectAlert failed", e)
-            }
-            Result.failure(e)
+        if (selectedProviderId.isBlank() || distanceKm < 0) {
+            return Result.failure(IllegalArgumentException("Select a valid nearby provider"))
         }
+        return createAlert(customerName, customerPhone, category, note, location, selectedProviderId)
     }
 
-    /** The logged-in customer's current live alert (ACTIVE or ACCEPTED, not expired). */
+    private suspend fun createAlert(
+        customerName: String,
+        customerPhone: String,
+        category: String,
+        note: String,
+        location: GeoPoint,
+        selectedProviderId: String?
+    ): Result<String> = try {
+        val customerId = firebaseAuth.currentUser?.uid
+            ?: return Result.failure(IllegalStateException("Please sign in to send an emergency request"))
+        val alertRef = alerts.document()
+        val stateRef = firestore.collection("emergencyCustomerState").document(customerId)
+        val expiresAt = Date(System.currentTimeMillis() + ALERT_LIFETIME_MS)
+
+        firestore.runTransaction { transaction ->
+            val stateSnapshot = transaction.get(stateRef)
+            val activeAlertId = stateSnapshot.getString("activeAlertId")
+            if (!activeAlertId.isNullOrBlank()) {
+                val existingRef = alerts.document(activeAlertId)
+                val existing = transaction.get(existingRef)
+                val status = existing.getString("status")
+                val existingExpiry = existing.getDate("expiresAt")?.time ?: 0L
+                val now = System.currentTimeMillis()
+                if (EmergencyAlertPolicy.hasUnexpiredLiveAlert(status.orEmpty(), existingExpiry, now)) {
+                    throw IllegalStateException("You already have an active emergency request")
+                }
+                if (EmergencyAlertPolicy.shouldExpire(status.orEmpty(), existingExpiry, now)) {
+                    transaction.update(existingRef, "status", EmergencyAlertPolicy.EXPIRED)
+                }
+            }
+
+            val alertData = hashMapOf<String, Any?>(
+                "alertId" to alertRef.id,
+                "customerId" to customerId,
+                "customerName" to customerName,
+                "customerPhone" to customerPhone,
+                "category" to category,
+                "note" to note,
+                "location" to location,
+                "status" to "ACTIVE",
+                "createdAt" to FieldValue.serverTimestamp(),
+                "expiresAt" to expiresAt,
+                "selectedProviderId" to selectedProviderId,
+                "acceptedProviderId" to null,
+                "acceptedProviderName" to null,
+                "acceptedProviderPhone" to null,
+                "acceptedAt" to null
+            )
+            transaction.set(alertRef, alertData)
+            transaction.set(
+                stateRef,
+                mapOf("activeAlertId" to alertRef.id, "updatedAt" to FieldValue.serverTimestamp())
+            )
+            alertRef.id
+        }.await()
+        Result.success(alertRef.id)
+    } catch (e: Exception) {
+        if (BuildConfig.DEBUG) Log.e(TAG, "Failed to create emergency alert", e)
+        Result.failure(e)
+    }
+
+    /** The latest alert stays visible after terminal states so the customer can see its outcome. */
     fun observeMyActiveAlert(): Flow<EmergencyAlert?> = callbackFlow {
         val customerId = firebaseAuth.currentUser?.uid
         if (customerId == null) {
@@ -176,15 +130,10 @@ class EmergencyAlertRepository(
             .addSnapshotListener { snapshot, error ->
                 if (error != null) { close(error); return@addSnapshotListener }
 
-                val now = System.currentTimeMillis()
-                val docs = snapshot?.toObjects(EmergencyAlert::class.java) ?: emptyList()
-                val live = docs.firstOrNull { alert ->
-                    val status = alert.status.uppercase(Locale.getDefault())
-                    val isLiveStatus = status == "ACTIVE" || status == "PENDING" || status == "ACCEPTED"
-                    val expiresAt = alert.expiresAt?.time ?: ((alert.createdAt?.time ?: now) + ALERT_LIFETIME_MS)
-                    isLiveStatus && (status == "ACCEPTED" || now < expiresAt)
-                }
-                trySend(live)
+                val latest = snapshot?.documents
+                    ?.mapNotNull { it.toObject(EmergencyAlert::class.java) }
+                    ?.maxByOrNull { it.createdAt?.time ?: 0L }
+                trySend(latest)
             }
         awaitClose { listener.remove() }
     }
@@ -197,6 +146,14 @@ class EmergencyAlertRepository(
                 trySend(alert)
             }
         awaitClose { listener.remove() }
+    }
+
+    suspend fun getAlert(alertId: String): Result<EmergencyAlert> = try {
+        val alert = alerts.document(alertId).get().await().toObject(EmergencyAlert::class.java)
+            ?: throw IllegalStateException("This emergency request is no longer available")
+        Result.success(alert)
+    } catch (e: Exception) {
+        Result.failure(e)
     }
 
     fun observeResponses(alertId: String): Flow<List<EmergencyResponse>> = callbackFlow {
@@ -214,12 +171,14 @@ class EmergencyAlertRepository(
      */
     suspend fun acceptAlert(
         alertId: String,
-        providerId: String,
-        providerName: String,
-        providerPhone: String
+        providerId: String
     ): Result<Unit> {
         return try {
-            val authUid = firebaseAuth.currentUser?.uid ?: ""
+            val authUid = firebaseAuth.currentUser?.uid
+                ?: return Result.failure(IllegalStateException("Please sign in to accept this request"))
+            if (authUid != providerId) {
+                return Result.failure(IllegalStateException("You can only accept requests for your account"))
+            }
             if (BuildConfig.DEBUG) {
                 Log.d(TAG, "DEBUG: 1. Current Firebase Auth UID: $authUid")
                 Log.d(TAG, "DEBUG: 6. Provider ID passed to acceptAlert(): $providerId")
@@ -229,28 +188,87 @@ class EmergencyAlertRepository(
 
             firestore.runTransaction { transaction ->
                 val ref = alerts.document(alertId)
+                val notificationRef = firestore.collection("providerNotifications")
+                    .document("${alertId}_$providerId")
+                val providerRef = firestore.collection("users").document(providerId)
                 val snapshot = transaction.get(ref)
-                val status = (snapshot.getString("status") ?: "ACTIVE").uppercase(Locale.getDefault())
+                val notification = transaction.get(notificationRef)
+                val provider = transaction.get(providerRef)
+                val status = snapshot.getString("status") ?: "ACTIVE"
                 val selectedProviderId = snapshot.getString("selectedProviderId")
+                val expiresAtMs = snapshot.getDate("expiresAt")?.time ?: 0L
+                val nowMs = System.currentTimeMillis()
 
-                if (BuildConfig.DEBUG) {
-                    Log.d(TAG, "DEBUG: 5. Current request status before acceptance: $status (selectedProviderId: $selectedProviderId)")
-                }
-
-                if (status != "ACTIVE" && status != "PENDING") {
+                if (!EmergencyAlertPolicy.canProviderAccept(
+                        status,
+                        notification.getString("status").orEmpty(),
+                        selectedProviderId,
+                        providerId,
+                        expiresAtMs,
+                        nowMs
+                    )
+                ) {
                     throw IllegalStateException("This request has already been accepted or closed.")
                 }
-                if (!selectedProviderId.isNullOrBlank() && selectedProviderId != providerId && !selectedProviderId.startsWith("demo_sos_provider_")) {
-                    throw IllegalStateException("This request was sent to a specific provider.")
+                if (!notification.exists() ||
+                    notification.getString("providerId") != providerId ||
+                    notification.getString("status") != "ACTIVE"
+                ) {
+                    throw IllegalStateException("This emergency request is no longer available to you")
+                }
+                val providerLocation = provider.getGeoPoint("lastLocation")
+                    ?: throw IllegalStateException("Your emergency location is unavailable")
+                val lastLocationAt = provider.getTimestamp("lastLocationAt")?.toDate()
+                    ?: provider.getDate("lastLocationAt")
+                    ?: throw IllegalStateException("Update your emergency availability location first")
+                val locationAgeMs = System.currentTimeMillis() - lastLocationAt.time
+                val providerCategories = provider.get("serviceCategories") as? List<*>
+                    ?: emptyList<Any>()
+                val providerRoles = provider.get("roles") as? List<*> ?: emptyList<Any>()
+                val customerLocation = snapshot.getGeoPoint("location")
+                    ?: throw IllegalStateException("The customer's emergency location is unavailable")
+                val category = snapshot.getString("category") ?: "Any"
+                val categoryAliases = when (category) {
+                    "Vehicle Mechanic" -> listOf("Vehicle Mechanic", "Mechanic")
+                    "Electrician" -> listOf("Electrician", "Electrical")
+                    "Plumber" -> listOf("Plumber", "Plumbing")
+                    "AC Technician" -> listOf("AC Technician", "AC Repair")
+                    "Computer Technician" -> listOf("Computer Technician", "Computer Repair")
+                    "Any Available Provider" -> listOf("Any")
+                    else -> listOf(category)
+                }
+                val distance = DistanceUtils.distanceKm(
+                    customerLocation.latitude,
+                    customerLocation.longitude,
+                    providerLocation.latitude,
+                    providerLocation.longitude
+                )
+                if (!providerRoles.contains("provider") ||
+                    provider.getBoolean("emergencyAvailable") != true ||
+                    locationAgeMs !in 0..MAX_LOCATION_AGE_MS ||
+                    providerLocation.latitude !in -90.0..90.0 ||
+                    providerLocation.longitude !in -180.0..180.0 ||
+                    distance > MAX_PROVIDER_DISTANCE_KM
+                ) {
+                    throw IllegalStateException("Turn on emergency availability and refresh your location before accepting")
+                }
+                if (category != "Any" &&
+                    categoryAliases.none { it in providerCategories }
+                ) {
+                    throw IllegalStateException("This request does not match your service categories")
                 }
 
+                val verifiedName = provider.getString("name")?.takeIf { it.isNotBlank() }
+                    ?: throw IllegalStateException("Complete your provider profile before accepting")
+                val verifiedPhone = provider.getString("phoneNumber")
+                    ?: throw IllegalStateException("Add a phone number to your provider profile before accepting")
                 transaction.update(
                     ref,
                     mapOf(
                         "status" to "ACCEPTED",
                         "acceptedProviderId" to providerId,
-                        "acceptedProviderName" to providerName,
-                        "acceptedProviderPhone" to providerPhone,
+                        "acceptedProviderName" to verifiedName,
+                        "acceptedProviderPhone" to verifiedPhone,
                         "acceptedAt" to FieldValue.serverTimestamp()
                     )
                 )
@@ -260,11 +278,6 @@ class EmergencyAlertRepository(
                 Log.d(TAG, "DEBUG: 7. Transaction success: true for alertId: $alertId")
                 Log.d(TAG, "DEBUG: 8. Firestore status after acceptance: ACCEPTED")
             }
-
-            // Also update notification status to ACCEPTED
-            val notifId = "${alertId}_$providerId"
-            firestore.collection("providerNotifications").document(notifId)
-                .update(mapOf("status" to "ACCEPTED", "isRead" to true)).await()
 
             Result.success(Unit)
         } catch (e: Exception) {
@@ -286,8 +299,14 @@ class EmergencyAlertRepository(
                 Log.d(TAG, "DEBUG: declineAlert starting for alertId: $alertId by providerId: $providerId")
             }
 
-            alerts.document(alertId).update("status", "DECLINED").await()
-            firestore.collection("providerNotifications").document(notificationId)
+            val notificationRef = firestore.collection("providerNotifications").document(notificationId)
+            val notification = notificationRef.get().await()
+            if (notification.getString("providerId") != providerId ||
+                notification.getString("alertId") != alertId
+            ) {
+                return Result.failure(IllegalStateException("This request is not assigned to you"))
+            }
+            notificationRef
                 .update(mapOf("status" to "DECLINED", "isRead" to true)).await()
 
             if (BuildConfig.DEBUG) {
@@ -305,14 +324,43 @@ class EmergencyAlertRepository(
     /** Customer closes or cancels the alert. */
     suspend fun closeAlert(alertId: String): Result<Unit> {
         return try {
-            val docSnap = alerts.document(alertId).get().await()
-            val selectedProviderId = docSnap.getString("selectedProviderId")
+            val customerId = firebaseAuth.currentUser?.uid
+                ?: return Result.failure(IllegalStateException("Please sign in to cancel this request"))
+            firestore.runTransaction { transaction ->
+                val ref = alerts.document(alertId)
+                val snapshot = transaction.get(ref)
+                if (snapshot.getString("customerId") != customerId) {
+                    throw IllegalStateException("You can only cancel your own request")
+                }
+                if (!EmergencyAlertPolicy.canCustomerCancel(
+                        snapshot.getString("status").orEmpty(),
+                        snapshot.getDate("expiresAt")?.time ?: 0L,
+                        System.currentTimeMillis()
+                    )
+                ) {
+                    throw IllegalStateException("Only an active request can be cancelled")
+                }
+                transaction.update(ref, "status", "CANCELLED")
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 
-            alerts.document(alertId).update("status", "CANCELLED").await()
-            if (!selectedProviderId.isNullOrBlank()) {
-                val notifId = "${alertId}_$selectedProviderId"
-                firestore.collection("providerNotifications").document(notifId)
-                    .update(mapOf("status" to "CANCELLED", "isRead" to true)).await()
+    suspend fun finishAcceptedAlert(alertId: String): Result<Unit> {
+        return try {
+            val customerId = firebaseAuth.currentUser?.uid
+                ?: return Result.failure(IllegalStateException("Please sign in to close this request"))
+            firestore.runTransaction { transaction ->
+                val ref = alerts.document(alertId)
+                val snapshot = transaction.get(ref)
+                if (snapshot.getString("customerId") != customerId ||
+                    !EmergencyAlertPolicy.canCustomerClose(snapshot.getString("status").orEmpty())
+                ) {
+                    throw IllegalStateException("Only your accepted request can be closed")
+                }
+                transaction.update(ref, "status", "CLOSED")
             }
             Result.success(Unit)
         } catch (e: Exception) {
@@ -521,5 +569,7 @@ class EmergencyAlertRepository(
     companion object {
         private const val TAG = "EmergencyAlertRepository"
         const val ALERT_LIFETIME_MS = 30L * 60 * 1000
+        const val MAX_LOCATION_AGE_MS = 15L * 60 * 1000
+        const val MAX_PROVIDER_DISTANCE_KM = 50.0
     }
 }

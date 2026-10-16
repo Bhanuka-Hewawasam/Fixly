@@ -2,37 +2,62 @@ package lk.ac.nibm.hdse.fixly_20.ui.screens
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Context
+import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.location.LocationManager
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
 import com.google.firebase.firestore.GeoPoint
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.rememberCameraPositionState
 import lk.ac.nibm.hdse.fixly_20.model.EmergencyAlert
+import lk.ac.nibm.hdse.fixly_20.model.EmergencyLocationPolicy
 import lk.ac.nibm.hdse.fixly_20.model.EmergencyResponse
 import lk.ac.nibm.hdse.fixly_20.ui.components.formatRating
 import lk.ac.nibm.hdse.fixly_20.util.dialNumber
 import lk.ac.nibm.hdse.fixly_20.util.openInMaps
 import lk.ac.nibm.hdse.fixly_20.viewmodel.EmergencySosViewModel
 
-private val sosCategories = listOf("Any", "Plumbing", "Electrical", "Cleaning", "Other")
+private val sosCategories = listOf(
+    "Vehicle Mechanic",
+    "Electrician",
+    "Plumber",
+    "AC Technician",
+    "Computer Technician",
+    "Other",
+    "Any Available Provider"
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("MissingPermission") // permission is checked in onSendClicked() before any location call
@@ -46,43 +71,75 @@ fun EmergencySosScreen(
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
     val uiState by viewModel.uiState.collectAsState()
-    val myAlert = uiState.myAlert
+    var dismissedAlertId by remember { mutableStateOf<String?>(null) }
+    val myAlert = uiState.myAlert?.takeIf { it.alertId != dismissedAlertId }
 
     var note by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("Any") }
+    var category by remember { mutableStateOf("Any Available Provider") }
     var isLocating by remember { mutableStateOf(false) }
+    var locationDisabled by remember { mutableStateOf(false) }
+    var sendAfterLocation by remember { mutableStateOf(false) }
 
-    // Step 1 of the one tap: where are we right now?
-    fun sendWithCurrentLocation() {
+    fun fetchCurrentLocation() {
+        val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        val isLocationEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+            locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+        val hasPermission = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!EmergencyLocationPolicy.canReadCurrentLocation(hasPermission, isLocationEnabled)) {
+            locationDisabled = !isLocationEnabled
+            viewModel.showError(
+                if (!hasPermission) "Location permission is needed to send an emergency alert."
+                else "Turn on Location services to share your current position."
+            )
+            return
+        }
+
+        locationDisabled = false
         isLocating = true
         fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
             .addOnSuccessListener { location ->
                 isLocating = false
                 if (location != null) {
-                    viewModel.sendAlert(GeoPoint(location.latitude, location.longitude), note, category)
+                    val point = GeoPoint(location.latitude, location.longitude)
+                    viewModel.setCustomerLocation(point)
+                    if (sendAfterLocation) {
+                        val serviceCategory = when (category) {
+                            "Any Available Provider" -> "Any"
+                            "Electrician" -> "Electrical"
+                            "Plumber" -> "Plumbing"
+                            "AC Technician" -> "AC Repair"
+                            else -> category
+                        }
+                        viewModel.sendAlert(point, note, serviceCategory)
+                    }
+                    sendAfterLocation = false
                 } else {
-                    viewModel.showError("Couldn't get your location. Turn on GPS and try again.")
+                    viewModel.showError("Couldn't get a current location fix. Check GPS and try again.")
                 }
             }
             .addOnFailureListener {
                 isLocating = false
-                viewModel.showError("Couldn't get your location. Turn on GPS and try again.")
+                viewModel.showError("Location could not be read. Check your connection and GPS, then retry.")
             }
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
-        if (granted) sendWithCurrentLocation()
+        if (granted) fetchCurrentLocation()
         else viewModel.showError("Location permission is needed to send an emergency alert.")
     }
 
-    fun onSendClicked() {
+    fun requestCurrentLocation(sendAlertAfterFix: Boolean) {
+        sendAfterLocation = sendAlertAfterFix
         val hasPermission = ContextCompat.checkSelfPermission(
             context, Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
 
-        if (hasPermission) sendWithCurrentLocation()
+        if (hasPermission) fetchCurrentLocation()
         else permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
     }
 
@@ -108,20 +165,27 @@ fun EmergencySosScreen(
                 onCall = { phone -> context.dialNumber(phone) },
                 onOpenMaps = { lat, lon, label -> context.openInMaps(lat, lon, label) },
                 onClose = viewModel::closeAlert,
-                onBrowseProviders = onBrowseProviders
+                onBrowseProviders = onBrowseProviders,
+                onNewRequest = { dismissedAlertId = myAlert.alertId },
+                errorMessage = uiState.errorMessage
             )
 
             else -> SendAlertContent(
                 paddingValues = padding,
                 isBusy = isLocating || uiState.isSending,
                 note = note,
-                onNoteChange = { note = it },
+                onNoteChange = { note = it.take(500) },
                 category = category,
                 onCategoryChange = { category = it },
                 errorMessage = uiState.errorMessage,
-                uiState = uiState,
-                viewModel = viewModel,
-                onSend = { onSendClicked() },
+                customerLocation = uiState.customerLocation,
+                locationDisabled = locationDisabled,
+                isLocating = isLocating,
+                onFindLocation = { requestCurrentLocation(false) },
+                onOpenLocationSettings = {
+                    context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                },
+                onSend = { requestCurrentLocation(true) },
                 onBrowseProviders = onBrowseProviders
             )
         }
@@ -137,147 +201,177 @@ private fun SendAlertContent(
     category: String,
     onCategoryChange: (String) -> Unit,
     errorMessage: String?,
-    uiState: lk.ac.nibm.hdse.fixly_20.viewmodel.EmergencySosUiState,
-    viewModel: EmergencySosViewModel,
+    customerLocation: GeoPoint?,
+    locationDisabled: Boolean,
+    isLocating: Boolean,
+    onFindLocation: () -> Unit,
+    onOpenLocationSettings: () -> Unit,
     onSend: () -> Unit,
     onBrowseProviders: () -> Unit
 ) {
-    val context = LocalContext.current
-    val isDebug = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
-
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(paddingValues)
             .verticalScroll(rememberScrollState())
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(
-            "Stuck on the road or need urgent help?",
-            style = MaterialTheme.typography.headlineSmall,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            "Tap once. We use your location and notify available providers within 25 km — they can respond straight away.",
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // The one big button
-        Button(
-            onClick = onSend,
-            enabled = !isBusy,
-            shape = CircleShape,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.error,
-                contentColor = MaterialTheme.colorScheme.onError
-            ),
-            modifier = Modifier.size(200.dp)
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+            shape = RoundedCornerShape(24.dp),
+            modifier = Modifier.fillMaxWidth()
         ) {
-            if (isBusy) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(32.dp),
-                        strokeWidth = 3.dp,
-                        color = MaterialTheme.colorScheme.onError
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Sending...", style = MaterialTheme.typography.titleMedium)
-                }
-            } else {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Text(
-                    "🚨\nSEND\nALERT",
+                    "Urgent help, when you need it",
                     style = MaterialTheme.typography.headlineSmall,
-                    textAlign = TextAlign.Center
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onErrorContainer
                 )
+                Text(
+                    "We'll share your location and notify nearby available service providers.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        if (customerLocation == null) "Location will be checked when you send"
+                        else "Current location ready",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
             }
         }
 
-        errorMessage?.let {
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                it,
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-                textAlign = TextAlign.Center
-            )
+        Text("Choose the help you need", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            sosCategories.chunked(2).forEach { rowCategories ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    rowCategories.forEach { option ->
+                        val selected = category == option
+                        Surface(
+                            onClick = { onCategoryChange(option) },
+                            shape = RoundedCornerShape(16.dp),
+                            color = if (selected) MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(
+                                if (selected) 2.dp else 1.dp,
+                                if (selected) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.outlineVariant
+                            ),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = option,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+                                else MaterialTheme.colorScheme.onSurface,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 14.dp)
+                            )
+                        }
+                    }
+                    if (rowCategories.size == 1) Spacer(Modifier.weight(1f))
+                }
+            }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // Optional extras — the alert works fine without them
         OutlinedTextField(
             value = note,
             onValueChange = onNoteChange,
             label = { Text("What happened? (optional)") },
-            placeholder = { Text("e.g. flat tyre, engine won't start") },
+            placeholder = { Text("Add a short note for the provider") },
+            minLines = 2,
+            maxLines = 4,
+            supportingText = { Text("${note.length}/500") },
             modifier = Modifier.fillMaxWidth()
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            "Who do you need? (optional)",
-            style = MaterialTheme.typography.titleSmall,
+        OutlinedButton(
+            onClick = onFindLocation,
+            enabled = !isLocating,
             modifier = Modifier.fillMaxWidth()
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            sosCategories.forEach { option ->
-                FilterChip(
-                    selected = category == option,
-                    onClick = { onCategoryChange(option) },
-                    label = { Text(option) }
+            Text(
+                when {
+                    isLocating -> "Getting your location…"
+                    customerLocation != null -> "Refresh current location"
+                    else -> "Get my current location"
+                }
+            )
+        }
+
+        customerLocation?.let { point ->
+            val position = LatLng(point.latitude, point.longitude)
+            val cameraState = rememberCameraPositionState {
+                this.position = CameraPosition.fromLatLngZoom(position, 15f)
+            }
+            LaunchedEffect(position) {
+                cameraState.position = CameraPosition.fromLatLngZoom(position, 15f)
+            }
+            Text("Your current location", style = MaterialTheme.typography.titleMedium)
+            GoogleMap(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(190.dp)
+                    .clip(RoundedCornerShape(20.dp)),
+                cameraPositionState = cameraState
+            ) {
+                Marker(
+                    state = MarkerState(position = position),
+                    title = "Emergency location",
+                    contentDescription = "Your emergency location"
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-        TextButton(onClick = onBrowseProviders) {
-            Text("Rather browse nearby providers yourself?")
-        }
-
-        // --- DEBUG ONLY ACTIONS FOR TESTING ---
-        if (isDebug) {
-            Spacer(modifier = Modifier.height(24.dp))
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+        if (locationDisabled) {
+            OutlinedButton(
+                onClick = onOpenLocationSettings,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text("🛠️ Debug Actions (DEV ONLY)", style = MaterialTheme.typography.titleSmall)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = viewModel::seedDemoProviders,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Seed Demo Providers", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
-                        }
-                        OutlinedButton(
-                            onClick = viewModel::deleteDemoProviders,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Delete Demo Providers", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
-                        }
-                    }
-                    uiState.debugMessage?.let { msg ->
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(msg, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                    }
-                }
+                Text("Turn on Location services")
             }
+        }
+
+        errorMessage?.let {
+            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+        }
+
+        Button(
+            onClick = onSend,
+            enabled = !isBusy,
+            shape = RoundedCornerShape(18.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+            modifier = Modifier.fillMaxWidth().height(62.dp)
+        ) {
+            if (isBusy) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(22.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onError
+                )
+                Spacer(Modifier.width(12.dp))
+                Text("Finding your location and sending…", fontWeight = FontWeight.Bold)
+            } else {
+                Text("Send Emergency Request", fontWeight = FontWeight.Bold)
+            }
+        }
+        Text(
+            "Your location is shared only to help providers reach you.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+        OutlinedButton(onClick = onBrowseProviders, modifier = Modifier.fillMaxWidth()) {
+            Text("Browse nearby providers instead")
         }
     }
 }
@@ -290,9 +384,14 @@ private fun WaitingContent(
     onCall: (String) -> Unit,
     onOpenMaps: (Double, Double, String) -> Unit,
     onClose: () -> Unit,
-    onBrowseProviders: () -> Unit
+    onBrowseProviders: () -> Unit,
+    onNewRequest: () -> Unit,
+    errorMessage: String?
 ) {
     val isAccepted = alert.status == "ACCEPTED"
+    val isActive = alert.status == "ACTIVE"
+    val terminalStatus = alert.status in listOf("CANCELLED", "EXPIRED", "CLOSED")
+    var showCloseConfirmation by remember(alert.alertId) { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -301,7 +400,25 @@ private fun WaitingContent(
             .padding(16.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        if (isAccepted) {
+        if (terminalStatus) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        when (alert.status) {
+                            "CANCELLED" -> "Request cancelled"
+                            "EXPIRED" -> "Request expired"
+                            else -> "Request closed"
+                        },
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text("This request is no longer active. You can send a new request if you still need help.")
+                }
+            }
+        } else if (isAccepted) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
@@ -355,13 +472,13 @@ private fun WaitingContent(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        "🚨 Searching for nearby providers within 25 km…",
+                        "Searching for nearby providers…",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onErrorContainer
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        "We are notifying available providers within 25 km of your location.",
+                        "Your emergency request is active. Available providers matching your service will be notified.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onErrorContainer
                     )
@@ -377,10 +494,7 @@ private fun WaitingContent(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                "Providers responding (${responses.size})",
-                style = MaterialTheme.typography.titleMedium
-            )
+            Text("Provider responses (${responses.size})", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
 
             if (responses.isEmpty()) {
@@ -411,13 +525,46 @@ private fun WaitingContent(
         }
 
         Spacer(modifier = Modifier.height(24.dp))
-        Button(
-            onClick = onClose,
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(if (isAccepted) "Close Request" else "Cancel Emergency Request")
+        errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+
+        when {
+            terminalStatus -> Button(onClick = onNewRequest, modifier = Modifier.fillMaxWidth()) {
+                Text("Send another emergency request")
+            }
+            isActive -> OutlinedButton(
+                onClick = { showCloseConfirmation = true },
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Cancel emergency request") }
+            isAccepted -> OutlinedButton(
+                onClick = { showCloseConfirmation = true },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Close request") }
         }
+    }
+
+    if (showCloseConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showCloseConfirmation = false },
+            title = { Text(if (isAccepted) "Close this request?" else "Cancel this emergency request?") },
+            text = {
+                Text(
+                    if (isAccepted) "This will mark the accepted request as closed."
+                    else "Nearby providers will no longer be able to accept this request."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showCloseConfirmation = false
+                        onClose()
+                    }
+                ) { Text(if (isAccepted) "Close request" else "Cancel request") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCloseConfirmation = false }) { Text("Keep request") }
+            }
+        )
     }
 }
 

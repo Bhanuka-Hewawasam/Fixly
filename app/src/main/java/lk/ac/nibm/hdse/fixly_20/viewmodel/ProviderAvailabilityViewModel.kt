@@ -25,6 +25,7 @@ class ProviderAvailabilityViewModel(
     val uiState: StateFlow<ProviderAvailabilityUiState> = _uiState
 
     private var lastPublishedLocation: GeoPoint? = null
+    private var lastPublishedAtMs: Long = 0L
 
     init {
         // Pick up the switch position from the last session
@@ -34,13 +35,25 @@ class ProviderAvailabilityViewModel(
         }
     }
 
-    fun setAvailable(available: Boolean, location: GeoPoint) {
+    fun setAvailable(available: Boolean, location: GeoPoint?) {
+        if (available && location == null) {
+            _uiState.update {
+                it.copy(errorMessage = "Allow location access and turn on Location services to become available.")
+            }
+            return
+        }
         viewModelScope.launch {
             _uiState.update { it.copy(isUpdating = true, errorMessage = null) }
 
             emergencyRepository.setAvailability(available, location)
                 .onSuccess {
-                    if (available) lastPublishedLocation = location
+                    if (available) {
+                        lastPublishedLocation = location
+                        lastPublishedAtMs = System.currentTimeMillis()
+                    } else {
+                        lastPublishedLocation = null
+                        lastPublishedAtMs = 0L
+                    }
                     _uiState.update { it.copy(isAvailable = available, isUpdating = false) }
                 }
                 .onFailure {
@@ -53,11 +66,27 @@ class ProviderAvailabilityViewModel(
 
     /** Keeps the shared position fresh while the switch is ON (called when the screen gets a new GPS fix). */
     fun refreshLocation(location: GeoPoint) {
-        if (!_uiState.value.isAvailable || location == lastPublishedLocation) return
+        if (!_uiState.value.isAvailable ||
+            (location == lastPublishedLocation &&
+                System.currentTimeMillis() - lastPublishedAtMs < LOCATION_REFRESH_INTERVAL_MS)
+        ) return
 
         viewModelScope.launch {
             emergencyRepository.setAvailability(true, location)
-                .onSuccess { lastPublishedLocation = location }
+                .onSuccess {
+                    lastPublishedLocation = location
+                    lastPublishedAtMs = System.currentTimeMillis()
+                }
         }
+    }
+
+    fun showNotificationPermissionWarning() {
+        _uiState.update {
+            it.copy(errorMessage = "Emergency availability is on, but notifications are disabled. Keep Fixly open to see requests.")
+        }
+    }
+
+    private companion object {
+        const val LOCATION_REFRESH_INTERVAL_MS = 60_000L
     }
 }

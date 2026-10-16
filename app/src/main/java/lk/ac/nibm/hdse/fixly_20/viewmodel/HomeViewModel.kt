@@ -22,6 +22,10 @@ data class HomeUiState(
     val activeRole: String = "customer", // which tab/view is currently shown
     val notifications: List<ProviderNotification> = emptyList(),
     val activeCustomerAlert: EmergencyAlert? = null,
+    val selectedEmergencyAlert: EmergencyAlert? = null,
+    val isLoadingEmergencyDetails: Boolean = false,
+    val emergencyDetailsError: String? = null,
+    val acceptingAlertId: String? = null,
     val errorMessage: String? = null
 )
 
@@ -95,16 +99,56 @@ class HomeViewModel(
         }
     }
 
+    fun loadEmergencyDetails(alertId: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                selectedEmergencyAlert = null,
+                isLoadingEmergencyDetails = true,
+                emergencyDetailsError = null
+            )
+            alertRepository.getAlert(alertId)
+                .onSuccess { alert ->
+                    _uiState.value = _uiState.value.copy(
+                        selectedEmergencyAlert = alert,
+                        isLoadingEmergencyDetails = false
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingEmergencyDetails = false,
+                        emergencyDetailsError = error.localizedMessage
+                            ?: "Couldn't load the emergency details."
+                    )
+                }
+        }
+    }
+
+    fun clearEmergencyDetails() {
+        _uiState.value = _uiState.value.copy(
+            selectedEmergencyAlert = null,
+            isLoadingEmergencyDetails = false,
+            emergencyDetailsError = null
+        )
+    }
+
+    fun showEmergencyDetailsError(message: String) {
+        _uiState.value = _uiState.value.copy(emergencyDetailsError = message)
+    }
+
     fun acceptAlert(alertId: String, onResult: (Boolean, String?) -> Unit) {
         viewModelScope.launch {
+            if (_uiState.value.acceptingAlertId != null) return@launch
+            _uiState.value = _uiState.value.copy(acceptingAlertId = alertId)
             val user = _uiState.value.user
             if (user == null) {
+                _uiState.value = _uiState.value.copy(acceptingAlertId = null)
                 onResult(false, "User profile not loaded")
                 return@launch
             }
-            alertRepository.acceptAlert(alertId, user.uid, user.name, user.phoneNumber)
+            alertRepository.acceptAlert(alertId, user.uid)
                 .onSuccess { onResult(true, null) }
                 .onFailure { e -> onResult(false, e.localizedMessage) }
+            _uiState.value = _uiState.value.copy(acceptingAlertId = null)
         }
     }
 

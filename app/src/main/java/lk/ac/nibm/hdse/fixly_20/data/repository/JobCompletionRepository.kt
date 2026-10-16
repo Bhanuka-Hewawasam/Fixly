@@ -38,7 +38,8 @@ class JobCompletionRepository(
                 providerRef,
                 mapOf(
                     "ratingSum" to FieldValue.increment(rating.toDouble()),
-                    "ratingCount" to FieldValue.increment(1L)
+                    "ratingCount" to FieldValue.increment(1L),
+                    "lastRatingJobId" to job.jobId
                 )
             )
             batch.commit().await()

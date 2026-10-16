@@ -16,9 +16,8 @@ class EmergencyRepository(
 ) {
 
     /**
-     * Provider opts in/out of emergency searches.
-     * When switching ON (or refreshing), their current location + timestamp are saved on their profile.
-     * When switching OFF, their location and timestamp are cleared.
+     * Provider opts in/out of emergency searches. Private location data remains in their user profile;
+     * a trusted Cloud Function mirrors only the approved emergency-search fields.
      */
     suspend fun setAvailability(available: Boolean, location: GeoPoint?): Result<Unit> {
         return try {
@@ -42,16 +41,44 @@ class EmergencyRepository(
     }
 
     /**
-     * Real-time stream of every provider who currently has "Available for emergencies" ON.
-     * Category / distance / freshness filtering is done by the ViewModel, so this stays a
-     * single-field query (no composite index needed).
+     * Real-time stream of the restricted emergency-provider projection, never full user documents.
      */
     fun observeAvailableProviders(): Flow<List<User>> = callbackFlow {
-        val listener = firestore.collection("users")
+        val listener = firestore.collection("emergencyProviderProfiles")
             .whereEqualTo("emergencyAvailable", true)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) { close(error); return@addSnapshotListener }
-                trySend(snapshot?.toObjects(User::class.java) ?: emptyList())
+                val providers = snapshot?.documents.orEmpty().mapNotNull { document ->
+                    val providerId = document.getString("providerId") ?: return@mapNotNull null
+                    val latitude = document.getDouble("latitude") ?: return@mapNotNull null
+                    val longitude = document.getDouble("longitude") ?: return@mapNotNull null
+                    if (latitude !in -90.0..90.0 || longitude !in -180.0..180.0) {
+                        return@mapNotNull null
+                    }
+                    val locationAt = document.getTimestamp("lastLocationAt")?.toDate()
+                        ?: return@mapNotNull null
+                    val rating = document.getDouble("rating")
+                        ?: document.getLong("rating")?.toDouble()
+                        ?: 0.0
+                    val ratingCount = document.getLong("ratingCount")?.toInt() ?: 0
+
+                    User(
+                        uid = providerId,
+                        name = document.getString("displayName").orEmpty(),
+                        roles = listOf("provider"),
+                        serviceCategories = (document.get("serviceCategories") as? List<*>)
+                            ?.filterIsInstance<String>()
+                            ?: emptyList(),
+                        profilePictureUrl = document.getString("profilePhotoUrl"),
+                        isVerified = document.getBoolean("isVerified") == true,
+                        ratingSum = rating * ratingCount,
+                        ratingCount = ratingCount,
+                        emergencyAvailable = document.getBoolean("emergencyAvailable") == true,
+                        lastLocation = GeoPoint(latitude, longitude),
+                        lastLocationAt = locationAt
+                    )
+                }
+                trySend(providers)
             }
         awaitClose { listener.remove() }
     }

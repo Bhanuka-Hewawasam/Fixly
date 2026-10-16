@@ -16,7 +16,7 @@ data class EmergencyAlert(
     val category: String = "Any",           // serviceType / category
     val note: String = "",
     val location: GeoPoint? = null,         // customerLocation
-    val status: String = "ACTIVE",          // ACTIVE, ACCEPTED, CANCELLED, EXPIRED, CLOSED, DECLINED, PENDING
+    val status: String = "ACTIVE",          // ACTIVE, ACCEPTED, CANCELLED, EXPIRED, CLOSED
     @ServerTimestamp val createdAt: Date? = null,
     val expiresAt: Date? = null,
     val selectedProviderId: String? = null, // target provider for direct request
@@ -54,7 +54,7 @@ data class ProviderNotification(
     val serviceType: String = "",
     val distanceKm: Double = 0.0,
     val isRead: Boolean = false,
-    val status: String = "ACTIVE",          // ACTIVE, ACCEPTED, CLOSED, CANCELLED, DECLINED, PENDING
+    val status: String = "ACTIVE",          // ACTIVE, ACCEPTED, CLOSED, CANCELLED, DECLINED, EXPIRED
     val isCleared: Boolean = false,
     @ServerTimestamp val createdAt: Date? = null,
     @ServerTimestamp val clearedAt: Date? = null

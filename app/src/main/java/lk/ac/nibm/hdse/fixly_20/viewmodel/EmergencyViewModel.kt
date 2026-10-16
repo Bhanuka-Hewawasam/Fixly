@@ -13,6 +13,7 @@ import lk.ac.nibm.hdse.fixly_20.data.repository.EmergencyRepository
 import lk.ac.nibm.hdse.fixly_20.data.repository.UserRepository
 import lk.ac.nibm.hdse.fixly_20.model.User
 import lk.ac.nibm.hdse.fixly_20.util.DistanceUtils
+import lk.ac.nibm.hdse.fixly_20.util.EmergencyProviderMatcher
 
 data class ProviderWithDistance(
     val provider: User,
@@ -23,7 +24,7 @@ data class ProviderWithDistance(
 data class EmergencyUiState(
     val isLoading: Boolean = true,
     val customerLocation: GeoPoint? = null,
-    val selectedCategory: String = "Any",
+    val selectedCategory: String = "Any Available Provider",
     val radiusKm: Int = 10,
     val allProviders: List<User> = emptyList(), // everyone who has "Available for emergencies" ON
     val results: List<ProviderWithDistance> = emptyList() // allProviders after category/distance/freshness filters
@@ -111,41 +112,16 @@ class EmergencyViewModel(
 
     private fun applyFilters(state: EmergencyUiState): EmergencyUiState {
         val myLocation = state.customerLocation ?: return state.copy(results = emptyList())
-        val myUid = firebaseAuth.currentUser?.uid
-        val myEmail = firebaseAuth.currentUser?.email
-        val now = System.currentTimeMillis()
-
-        val results = state.allProviders.mapNotNull { provider ->
-            // Robust self-exclusion: customer must never see themselves as a provider
-            if (myUid != null && provider.uid == myUid) return@mapNotNull null
-            if (myEmail != null && provider.email.isNotBlank() && provider.email.equals(myEmail, ignoreCase = true)) {
-                return@mapNotNull null
-            }
-
-            val providerLocation = provider.lastLocation ?: return@mapNotNull null
-            val sharedAt = provider.lastLocationAt ?: return@mapNotNull null
-
-            // Too old = the provider has probably moved (or forgot the switch is ON)
-            val ageMs = maxOf(0L, now - sharedAt.time)
-            if (ageMs > MAX_LOCATION_AGE_MS) return@mapNotNull null
-
-            if (state.selectedCategory != "Any" && !provider.serviceCategories.contains(state.selectedCategory)) {
-                return@mapNotNull null
-            }
-
-            val distance = DistanceUtils.distanceKm(
-                myLocation.latitude, myLocation.longitude,
-                providerLocation.latitude, providerLocation.longitude
-            )
-            if (distance > state.radiusKm) return@mapNotNull null
-
-            ProviderWithDistance(provider, distance, ageMs / 60_000)
-        }.sortedBy { it.distanceKm } // nearest first — in an emergency, closest helps fastest
+        val matches = EmergencyProviderMatcher.findMatches(
+            providers = state.allProviders,
+            customerLocation = myLocation,
+            category = state.selectedCategory,
+            radiusKm = state.radiusKm,
+            currentUid = firebaseAuth.currentUser?.uid,
+            currentEmail = firebaseAuth.currentUser?.email
+        )
+        val results = matches.map { ProviderWithDistance(it.provider, it.distanceKm, it.minutesAgo) }
 
         return state.copy(results = results)
-    }
-
-    private companion object {
-        const val MAX_LOCATION_AGE_MS = 3L * 60 * 60 * 1000 // 3 hours
     }
 }

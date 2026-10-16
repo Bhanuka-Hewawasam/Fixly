@@ -30,6 +30,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.SubcomposeAsyncImage
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.rememberCameraPositionState
 import kotlinx.coroutines.delay
 import lk.ac.nibm.hdse.fixly_20.BuildConfig
 import lk.ac.nibm.hdse.fixly_20.data.repository.EmergencyAlertRepository
@@ -180,7 +186,9 @@ fun HomeScreen(
 
         // --- PERSISTENT MINIMIZED ACTIVE REQUEST CARD FOR CUSTOMER ON HOME ---
         val activeAlert = uiState.activeCustomerAlert
-        if (uiState.activeRole == "customer" && activeAlert != null && activeAlert.status != "EXPIRED") {
+        if (uiState.activeRole == "customer" && activeAlert != null &&
+            activeAlert.status in listOf("ACTIVE", "ACCEPTED")
+        ) {
             val status = activeAlert.status
             val isAccepted = status == "ACCEPTED"
             val now = System.currentTimeMillis()
@@ -201,6 +209,7 @@ fun HomeScreen(
             val countdownStr = String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
 
             var showExpandedDialog by remember { mutableStateOf(false) }
+            var showCancelConfirmation by remember(activeAlert.alertId) { mutableStateOf(false) }
 
             if (BuildConfig.DEBUG) {
                 LaunchedEffect(activeAlert.alertId) {
@@ -248,7 +257,7 @@ fun HomeScreen(
                             }
                             if (!isAccepted) {
                                 OutlinedButton(
-                                    onClick = { viewModel.cancelActiveAlert(activeAlert.alertId) }
+                                    onClick = { showCancelConfirmation = true }
                                 ) {
                                     Text("Cancel")
                                 }
@@ -271,7 +280,6 @@ fun HomeScreen(
                             if (isAccepted) {
                                 Text("Provider: ${activeAlert.acceptedProviderName ?: "Provider"}", style = MaterialTheme.typography.titleMedium)
                                 Text("Phone: ${activeAlert.acceptedProviderPhone ?: "N/A"}")
-                                Text("Rating: 4.8 ⭐")
                                 Text("Services: ${activeAlert.category}")
                                 Text("The selected provider is on the way.")
                             } else {
@@ -310,7 +318,7 @@ fun HomeScreen(
                             } else {
                                 Button(
                                     onClick = {
-                                        viewModel.cancelActiveAlert(activeAlert.alertId)
+                                        showCancelConfirmation = true
                                         showExpandedDialog = false
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
@@ -325,6 +333,26 @@ fun HomeScreen(
                         TextButton(onClick = { showExpandedDialog = false }) {
                             Text("Close")
                         }
+                    }
+                )
+            }
+
+            if (showCancelConfirmation) {
+                AlertDialog(
+                    onDismissRequest = { showCancelConfirmation = false },
+                    title = { Text("Cancel emergency request?") },
+                    text = { Text("Nearby providers will no longer be able to accept this request.") },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                showCancelConfirmation = false
+                                viewModel.cancelActiveAlert(activeAlert.alertId)
+                                showExpandedDialog = false
+                            }
+                        ) { Text("Cancel request") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showCancelConfirmation = false }) { Text("Keep request") }
                     }
                 )
             }
@@ -599,7 +627,7 @@ fun HomeScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "This request appears instantly in the provider dashboard while the provider is online. Phone push notifications require a backend push service.",
+                            text = "Open a request to review the customer's location and details before responding.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             modifier = Modifier.padding(12.dp)
@@ -675,18 +703,15 @@ fun HomeScreen(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
-                                            Button(
+                                            OutlinedButton(
                                                 onClick = {
-                                                    viewModel.acceptAlert(notif.alertId) { success, _ ->
-                                                        if (success) {
-                                                            viewModel.markNotificationRead(notif.notificationId)
-                                                            selectedNotification = notif
-                                                        }
-                                                    }
+                                                    selectedNotification = notif
+                                                    viewModel.loadEmergencyDetails(notif.alertId)
+                                                    viewModel.markNotificationRead(notif.notificationId)
                                                 },
                                                 modifier = Modifier.weight(1f)
                                             ) {
-                                                Text("Accept / I can help")
+                                                Text("View details")
                                             }
                                             OutlinedButton(
                                                 onClick = {
@@ -731,22 +756,126 @@ fun HomeScreen(
         }
 
         selectedNotification?.let { notif ->
+            val emergencyDetails = uiState.selectedEmergencyAlert
+            val emergencyDetailsError = uiState.emergencyDetailsError
             AlertDialog(
-                onDismissRequest = { selectedNotification = null },
+                onDismissRequest = {
+                    selectedNotification = null
+                    viewModel.clearEmergencyDetails()
+                },
                 title = { Text(notif.title) },
                 text = {
-                    Column {
-                        Text("Service: ${notif.serviceType}", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("Distance: ${String.format(Locale.getDefault(), "%.1f", notif.distanceKm)} km away", style = MaterialTheme.typography.bodySmall)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(notif.body, style = MaterialTheme.typography.bodyMedium)
+                    Column(
+                        modifier = Modifier
+                            .heightIn(max = 360.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        when {
+                            uiState.isLoadingEmergencyDetails -> CircularProgressIndicator()
+                            emergencyDetailsError != null -> Column {
+                                Text(
+                                    emergencyDetailsError,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                                TextButton(onClick = { viewModel.loadEmergencyDetails(notif.alertId) }) {
+                                    Text("Retry")
+                                }
+                            }
+                            emergencyDetails != null -> {
+                                val alert = emergencyDetails
+                                Text("Customer: ${alert.customerName}", fontWeight = FontWeight.Bold)
+                                Text("Category: ${alert.category}")
+                                Text(
+                                    "Distance: ${String.format(Locale.getDefault(), "%.1f", notif.distanceKm)} km away",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                if (alert.note.isNotBlank()) {
+                                    Spacer(Modifier.height(8.dp))
+                                    Text("Note: ${alert.note}")
+                                }
+                                alert.location?.let { location ->
+                                    val latLng = LatLng(location.latitude, location.longitude)
+                                    val cameraState = rememberCameraPositionState {
+                                        position = CameraPosition.fromLatLngZoom(latLng, 14f)
+                                    }
+                                    GoogleMap(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(150.dp)
+                                            .clip(RoundedCornerShape(16.dp)),
+                                        cameraPositionState = cameraState
+                                    ) {
+                                        Marker(
+                                            state = MarkerState(position = latLng),
+                                            title = "Emergency location"
+                                        )
+                                    }
+                                    Spacer(Modifier.height(8.dp))
+                                    OutlinedButton(
+                                        onClick = {
+                                            context.openInMaps(
+                                                location.latitude,
+                                                location.longitude,
+                                                "Emergency location"
+                                            )
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) { Text("Open customer location in Maps") }
+                                }
+                            }
+                        }
                     }
                 },
                 confirmButton = {
-                    Button(onClick = { selectedNotification = null }) {
-                        Text("Close")
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (!emergencyDetails?.customerPhone.isNullOrBlank()) {
+                            OutlinedButton(
+                                onClick = { emergencyDetails?.customerPhone?.let(context::dialNumber) },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Call customer")
+                            }
+                        }
+                        Button(
+                            enabled = !uiState.isLoadingEmergencyDetails &&
+                                uiState.acceptingAlertId != notif.alertId &&
+                                uiState.selectedEmergencyAlert != null,
+                            onClick = {
+                                viewModel.acceptAlert(notif.alertId) { success, error ->
+                                    if (success) {
+                                        selectedNotification = null
+                                        viewModel.clearEmergencyDetails()
+                                    } else {
+                                        viewModel.showEmergencyDetailsError(
+                                            error ?: "This request could not be accepted."
+                                        )
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            if (uiState.acceptingAlertId == notif.alertId) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Text("Accept request")
+                            }
+                        }
                     }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            viewModel.declineAlert(notif.notificationId, notif.alertId)
+                            selectedNotification = null
+                            viewModel.clearEmergencyDetails()
+                        }
+                    ) { Text("Decline") }
                 }
             )
         }
