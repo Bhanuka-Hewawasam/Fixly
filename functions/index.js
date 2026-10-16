@@ -24,14 +24,21 @@ exports.syncEmergencyProviderProfile = onDocumentWritten(
         const providerId = event.params.providerId;
         const userSnapshot = await db.collection("users").doc(providerId).get();
         const profileRef = db.collection("emergencyProviderProfiles").doc(providerId);
+        const contactRef = db.collection("emergencyProviderContacts").doc(providerId);
         const profile = userSnapshot.exists
             ? emergencyProviderProfile(providerId, userSnapshot.data(), Date.now())
             : null;
 
         if (profile) {
             await profileRef.set(profile);
+            const phoneNumber = userSnapshot.get("phoneNumber");
+            if (typeof phoneNumber === "string" && phoneNumber.trim()) {
+                await contactRef.set({ providerId, phoneNumber });
+            } else {
+                await contactRef.delete();
+            }
         } else {
-            await profileRef.delete();
+            await Promise.all([profileRef.delete(), contactRef.delete()]);
         }
     }
 );
@@ -315,7 +322,10 @@ exports.pruneStaleEmergencyProviderProfiles = onSchedule(
                 .get();
             if (staleProfiles.empty) break;
             const batch = db.batch();
-            staleProfiles.docs.forEach((doc) => batch.delete(doc.ref));
+            staleProfiles.docs.forEach((doc) => {
+                batch.delete(doc.ref);
+                batch.delete(db.collection("emergencyProviderContacts").doc(doc.id));
+            });
             await batch.commit();
             removedCount += staleProfiles.size;
         }

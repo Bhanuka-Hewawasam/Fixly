@@ -105,6 +105,29 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /emergencyProviderContacts/{providerId} {
+      function alertSelectsProvider(alertId) {
+        let alertPath = /databases/$(database)/documents/emergencyAlerts/$(alertId);
+        return alertId is string
+          && exists(alertPath)
+          && get(alertPath).data.customerId == request.auth.uid
+          && get(alertPath).data.selectedProviderId == providerId
+          && get(alertPath).data.status in ['ACTIVE', 'ACCEPTED']
+          && (
+            get(alertPath).data.status == 'ACCEPTED'
+            || get(alertPath).data.expiresAt > request.time
+          );
+      }
+      allow read: if signedIn()
+        && exists(/databases/$(database)/documents/emergencyCustomerState/$(request.auth.uid))
+        && alertSelectsProvider(
+          get(/databases/$(database)/documents/emergencyCustomerState/$(request.auth.uid)).data.activeAlertId
+        )
+        && resource.data.keys().hasOnly(['providerId', 'phoneNumber'])
+        && resource.data.providerId == providerId;
+      allow create, update, delete: if false;
+    }
+
     match /emergencyCustomerState/{uid} {
       allow read: if isOwner(uid);
       allow create, update: if isOwner(uid)

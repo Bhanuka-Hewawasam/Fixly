@@ -24,7 +24,6 @@ data class EmergencySosUiState(
     val responses: List<EmergencyResponse> = emptyList(), // providers who said "I can help"
     val isSending: Boolean = false,
     val errorMessage: String? = null,
-    val debugMessage: String? = null                  // status message from seed/delete actions
 )
 
 class EmergencySosViewModel(
@@ -134,28 +133,6 @@ class EmergencySosViewModel(
 
     fun setCustomerLocation(location: GeoPoint) {
         _uiState.update { it.copy(customerLocation = location, errorMessage = null) }
-    }
-
-    fun seedDemoProviders() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(debugMessage = "Seeding demo providers...") }
-            alertRepository.seedDemoProviders()
-                .onSuccess { _uiState.update { it.copy(debugMessage = "Successfully seeded 3 demo SOS providers.") } }
-                .onFailure { e -> _uiState.update { it.copy(debugMessage = "Failed to seed: ${e.localizedMessage}") } }
-        }
-    }
-
-    fun deleteDemoProviders() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(debugMessage = "Deleting demo providers...") }
-            alertRepository.deleteDemoProviders()
-                .onSuccess { _uiState.update { it.copy(debugMessage = "Successfully deleted demo SOS providers.") } }
-                .onFailure { e -> _uiState.update { it.copy(debugMessage = "Failed to delete: ${e.localizedMessage}") } }
-        }
-    }
-
-    fun clearDebugMessage() {
-        _uiState.update { it.copy(debugMessage = null) }
     }
 
     private fun friendlyError(error: Throwable): String = when (error) {

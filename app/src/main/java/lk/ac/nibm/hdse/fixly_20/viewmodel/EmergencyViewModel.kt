@@ -18,7 +18,8 @@ import lk.ac.nibm.hdse.fixly_20.util.EmergencyProviderMatcher
 data class ProviderWithDistance(
     val provider: User,
     val distanceKm: Double,
-    val minutesAgo: Long // how long ago the provider last shared their location
+    val minutesAgo: Long, // how long ago the provider last shared their location
+    val isDemo: Boolean = false
 )
 
 data class EmergencyUiState(
@@ -91,22 +92,6 @@ class EmergencyViewModel(
                 distanceKm = distanceKm
             )
             onResult(result)
-        }
-    }
-
-    fun seedDemoProviders(onResult: (String) -> Unit) {
-        viewModelScope.launch {
-            alertRepository.seedDemoProviders()
-                .onSuccess { onResult("Successfully seeded 3 demo SOS providers.") }
-                .onFailure { onResult("Failed to seed: ${it.localizedMessage}") }
-        }
-    }
-
-    fun deleteDemoProviders(onResult: (String) -> Unit) {
-        viewModelScope.launch {
-            alertRepository.deleteDemoProviders()
-                .onSuccess { onResult("Successfully deleted demo SOS providers.") }
-                .onFailure { onResult("Failed to delete: ${it.localizedMessage}") }
         }
     }
 

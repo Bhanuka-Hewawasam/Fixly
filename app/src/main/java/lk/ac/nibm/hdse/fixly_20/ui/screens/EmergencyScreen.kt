@@ -45,11 +45,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import lk.ac.nibm.hdse.fixly_20.data.repository.EmergencyAlertRepository
 import lk.ac.nibm.hdse.fixly_20.model.EmergencyAlert
+import lk.ac.nibm.hdse.fixly_20.model.User
 import lk.ac.nibm.hdse.fixly_20.ui.components.formatRating
+import lk.ac.nibm.hdse.fixly_20.util.EmergencyProviderMatcher
 import lk.ac.nibm.hdse.fixly_20.util.openInMaps
 import lk.ac.nibm.hdse.fixly_20.viewmodel.EmergencyViewModel
 import lk.ac.nibm.hdse.fixly_20.viewmodel.ProviderWithDistance
 import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 private val categoryFilters = listOf(
@@ -72,6 +75,7 @@ fun EmergencyScreen(
     viewModel: EmergencyViewModel = viewModel()
 ) {
     val context = LocalContext.current
+    val isDebugBuild = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
     val coroutineScope = rememberCoroutineScope()
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     val alertRepository = remember { EmergencyAlertRepository() }
@@ -82,13 +86,15 @@ fun EmergencyScreen(
     var isLocating by remember { mutableStateOf(false) }
     var locationFailed by remember { mutableStateOf(false) }
     var selectedProvider by remember { mutableStateOf<ProviderWithDistance?>(null) }
-    var debugMsg by remember { mutableStateOf<String?>(null) }
+    var showDemoProviders by remember { mutableStateOf(false) }
 
     // Request help dialog & active request states
     var requestingProvider by remember { mutableStateOf<ProviderWithDistance?>(null) }
     var requestNote by remember { mutableStateOf("") }
     var activeRequestId by remember { mutableStateOf<String?>(null) }
     var activeAlert by remember { mutableStateOf<EmergencyAlert?>(null) }
+    var selectedProviderPhone by remember { mutableStateOf<String?>(null) }
+    var providerContactError by remember { mutableStateOf<String?>(null) }
     var requestErrorMessage by remember { mutableStateOf<String?>(null) }
     var isSendingRequest by remember { mutableStateOf(false) }
     var isMinimized by remember { mutableStateOf(false) }
@@ -113,7 +119,80 @@ fun EmergencyScreen(
         }
     }
 
+    LaunchedEffect(activeAlert?.alertId, activeAlert?.selectedProviderId, activeAlert?.status) {
+        selectedProviderPhone = null
+        providerContactError = null
+        val alert = activeAlert
+        val providerId = alert?.selectedProviderId
+        if (alert != null && providerId != null && alert.status in listOf("ACTIVE", "ACCEPTED")) {
+            alertRepository.getEmergencyProviderPhone(alert.alertId, providerId)
+                .onSuccess { selectedProviderPhone = it }
+                .onFailure { providerContactError = it.localizedMessage ?: "Couldn't load provider contact details." }
+        }
+    }
+
     val customerLatLng = uiState.customerLocation?.let { LatLng(it.latitude, it.longitude) }
+    val demoProviderMatches = remember(uiState.customerLocation, uiState.selectedCategory, uiState.radiusKm) {
+        val customerLocation = uiState.customerLocation
+        if (customerLocation == null) {
+            emptyList()
+        } else {
+            val now = Date()
+            val sampleProviders = listOf(
+                User(
+                    uid = "demo-preview-mechanic",
+                    name = "Sample Vehicle Mechanic",
+                    phoneNumber = "077 000 0001",
+                    roles = listOf("provider"),
+                    serviceCategories = listOf("Vehicle Mechanic"),
+                    ratingSum = 46.0,
+                    ratingCount = 10,
+                    isVerified = true,
+                    emergencyAvailable = true,
+                    lastLocation = GeoPoint(customerLocation.latitude + 0.003, customerLocation.longitude + 0.002),
+                    lastLocationAt = now
+                ),
+                User(
+                    uid = "demo-preview-electrician",
+                    name = "Sample Electrician",
+                    phoneNumber = "077 000 0002",
+                    roles = listOf("provider"),
+                    serviceCategories = listOf("Electrician"),
+                    ratingSum = 43.0,
+                    ratingCount = 9,
+                    emergencyAvailable = true,
+                    lastLocation = GeoPoint(customerLocation.latitude - 0.006, customerLocation.longitude + 0.004),
+                    lastLocationAt = now
+                ),
+                User(
+                    uid = "demo-preview-plumber",
+                    name = "Sample Plumber",
+                    phoneNumber = "077 000 0003",
+                    roles = listOf("provider"),
+                    serviceCategories = listOf("Plumber"),
+                    ratingSum = 48.0,
+                    ratingCount = 12,
+                    isVerified = true,
+                    emergencyAvailable = true,
+                    lastLocation = GeoPoint(customerLocation.latitude + 0.014, customerLocation.longitude - 0.008),
+                    lastLocationAt = now
+                )
+            )
+            EmergencyProviderMatcher.findMatches(
+                providers = sampleProviders,
+                customerLocation = customerLocation,
+                category = uiState.selectedCategory,
+                radiusKm = uiState.radiusKm,
+                currentUid = null,
+                currentEmail = null
+            ).map { ProviderWithDistance(it.provider, it.distanceKm, it.minutesAgo, isDemo = true) }
+        }
+    }
+    val displayedProviders = if (isDebugBuild && showDemoProviders) {
+        (uiState.results + demoProviderMatches).sortedBy { it.distanceKm }
+    } else {
+        uiState.results
+    }
     val cameraPositionState = rememberCameraPositionState {
         customerLatLng?.let { position = CameraPosition.fromLatLngZoom(it, 13f) }
     }
@@ -222,43 +301,28 @@ fun EmergencyScreen(
                     }
 
                     // --- DEBUG ONLY ACTIONS FOR TESTING ---
-                    val isDebug = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
-                    if (isDebug) {
+                    if (isDebugBuild) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Card(
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                         ) {
                             Column(modifier = Modifier.padding(12.dp)) {
-                                Text("🛠️ Debug Actions (DEV ONLY)", style = MaterialTheme.typography.titleSmall)
+                                Text("Test preview (debug build only)", style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    "Sample providers appear only on this device. Calls and emergency requests are disabled for samples.",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
                                 Spacer(modifier = Modifier.height(6.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Button(
-                                        onClick = { viewModel.seedDemoProviders { debugMsg = it } },
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text("Seed Demo Providers", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
-                                    }
-                                    OutlinedButton(
-                                        onClick = { viewModel.deleteDemoProviders { debugMsg = it } },
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text("Delete Demo Providers", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
-                                    }
-                                }
-                                debugMsg?.let { msg ->
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Text(msg, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                                OutlinedButton(onClick = { showDemoProviders = !showDemoProviders }) {
+                                    Text(if (showDemoProviders) "Hide sample providers" else "Show sample providers")
                                 }
                             }
                         }
                     }
 
                     Text(
-                        "What do you need?",
+                        "Choose the help you need",
                         style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.padding(start = 16.dp, top = 8.dp)
                     )
@@ -316,7 +380,7 @@ fun EmergencyScreen(
                                 )
 
                                 // Provider markers
-                                uiState.results.forEach { item ->
+                                displayedProviders.forEach { item ->
                                     val pLoc = item.provider.lastLocation
                                     if (pLoc != null) {
                                         val pLatLng = LatLng(pLoc.latitude, pLoc.longitude)
@@ -345,7 +409,7 @@ fun EmergencyScreen(
                             }
                         }
 
-                        uiState.results.isEmpty() -> {
+                        displayedProviders.isEmpty() -> {
                             Box(
                                 modifier = Modifier.fillMaxWidth().weight(1f).padding(24.dp),
                                 contentAlignment = Alignment.Center
@@ -368,7 +432,7 @@ fun EmergencyScreen(
                                 contentPadding = PaddingValues(16.dp),
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                items(uiState.results) { item ->
+                                items(displayedProviders, key = { it.provider.uid }) { item ->
                                     ProviderCard(
                                         item = item,
                                         isSelected = selectedProvider?.provider?.uid == item.provider.uid,
@@ -387,7 +451,6 @@ fun EmergencyScreen(
                                                 requestingProvider = item
                                             }
                                         },
-                                        onCall = { callProvider(item.provider.phoneNumber) }
                                     )
                                 }
                             }
@@ -584,6 +647,60 @@ fun EmergencyScreen(
                             TextButton(onClick = { activeRequestId = null }) {
                                 Text("Close")
                             }
+                        }
+                    }
+
+                    if (!isAccepted && selectedProviderPhone != null) {
+                        val selectedProvider = alert?.selectedProviderId
+                            ?.let { providerId -> displayedProviders.firstOrNull { it.provider.uid == providerId }?.provider }
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    "Contact ${selectedProvider?.name ?: "your selected provider"}",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Text("Service: ${alert?.category ?: "Emergency assistance"}")
+                                Text(
+                                    selectedProviderPhone.orEmpty(),
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                                Button(
+                                    onClick = { callProvider(selectedProviderPhone.orEmpty()) },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Call provider")
+                                }
+                            }
+                        }
+                    } else if (alert?.selectedProviderId != null && providerContactError != null) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                providerContactError.orEmpty(),
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            TextButton(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        alertRepository.getEmergencyProviderPhone(
+                                            reqId,
+                                            alert.selectedProviderId.orEmpty()
+                                        ).onSuccess {
+                                            selectedProviderPhone = it
+                                            providerContactError = null
+                                        }.onFailure {
+                                            providerContactError = it.localizedMessage
+                                                ?: "Couldn't load provider contact details."
+                                        }
+                                    }
+                                }
+                            ) { Text("Retry loading number") }
                         }
                     }
 
@@ -825,8 +942,7 @@ private fun ProviderCard(
     item: ProviderWithDistance,
     isSelected: Boolean,
     onClick: () -> Unit,
-    onRequestHelp: () -> Unit,
-    onCall: () -> Unit
+    onRequestHelp: () -> Unit
 ) {
     val provider = item.provider
     val distanceText = String.format(Locale.getDefault(), "%.1f", item.distanceKm)
@@ -892,6 +1008,17 @@ private fun ProviderCard(
                 "$distanceText km away • location updated $updatedText",
                 style = MaterialTheme.typography.bodySmall
             )
+            if (isSelected) {
+                Text(
+                    if (item.isDemo) {
+                        "Sample preview only. Calls and requests are disabled."
+                    } else {
+                        "Send a request to this provider to reveal their contact number."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
             Row(
@@ -900,20 +1027,18 @@ private fun ProviderCard(
             ) {
                 Button(
                     onClick = onRequestHelp,
+                    enabled = !item.isDemo,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("Send Emergency Request")
+                    Text(if (item.isDemo) "Sample only" else "Request help")
                 }
                 OutlinedButton(
-                    onClick = onCall,
-                    enabled = provider.phoneNumber.isNotBlank(),
+                    onClick = onClick,
+                    enabled = !isSelected,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text(
-                        if (provider.phoneNumber.isBlank()) "Call after acceptance"
-                        else "Call"
-                    )
+                    Text(if (isSelected) "Selected" else "View on map")
                 }
             }
         }
