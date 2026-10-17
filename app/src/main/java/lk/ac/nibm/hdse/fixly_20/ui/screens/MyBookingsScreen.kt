@@ -117,17 +117,23 @@ private fun BookingCard(
                         Text("View Provider Certificate")
                     }
                 }
-                job.providerPhone?.takeIf { it.isNotBlank() }?.let { phone ->
+                if (!job.providerPhone.isNullOrBlank()) {
                     Button(
                         onClick = {
                             context.startActivity(
-                                Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", phone, null))
+                                Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", job.providerPhone, null))
                             )
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Call Provider")
                     }
+                } else {
+                    Text(
+                        "Provider hasn't added a phone number",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
                 }
             }
 

@@ -5,25 +5,34 @@ import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BrokenImage
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.SubcomposeAsyncImage
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.GeoPoint
+import lk.ac.nibm.hdse.fixly_20.data.repository.BidRepository
 import lk.ac.nibm.hdse.fixly_20.model.JobPost
 import lk.ac.nibm.hdse.fixly_20.viewmodel.AvailableJobsViewModel
 
@@ -209,6 +218,10 @@ fun AvailableJobsScreen(
 @Composable
 private fun JobCard(job: JobPost, distanceKm: Double, onPlaceBid: () -> Unit) {
     val distanceText = String.format(java.util.Locale.getDefault(), "%.1f", distanceKm)
+    val currentUid = remember { FirebaseAuth.getInstance().currentUser?.uid }
+    val bidRepository = remember { BidRepository() }
+    val bids by bidRepository.observeBidsForJob(job.jobId).collectAsState(initial = emptyList())
+    val hasAlreadyBided = bids.any { it.providerId == currentUid }
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -225,14 +238,67 @@ private fun JobCard(job: JobPost, distanceKm: Double, onPlaceBid: () -> Unit) {
             Spacer(modifier = Modifier.height(6.dp))
             Text(job.description, style = MaterialTheme.typography.bodyMedium)
 
+            val imageUrl = job.imageUrls.firstOrNull()
+            if (!imageUrl.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                var showFullImage by remember { mutableStateOf(false) }
+                SubcomposeAsyncImage(
+                    model = imageUrl,
+                    contentDescription = "Job Image",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(150.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { showFullImage = true },
+                    loading = {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                        }
+                    },
+                    error = {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Icon(imageVector = Icons.Outlined.BrokenImage, contentDescription = "Image error")
+                        }
+                    }
+                )
+                if (showFullImage) {
+                    AlertDialog(
+                        onDismissRequest = { showFullImage = false },
+                        title = { Text("Job Photo") },
+                        text = {
+                            SubcomposeAsyncImage(
+                                model = imageUrl,
+                                contentDescription = "Full Job Image",
+                                modifier = Modifier.fillMaxWidth().height(350.dp),
+                                contentScale = ContentScale.Fit
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(onClick = { showFullImage = false }) { Text("Close") }
+                        }
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(8.dp))
             Text("📍 ${job.address} • $distanceText km away", style = MaterialTheme.typography.bodySmall)
             Text("🗓 ${job.preferredDate} ${job.preferredTime}", style = MaterialTheme.typography.bodySmall)
             Text("Posted by ${job.customerName}", style = MaterialTheme.typography.bodySmall)
 
             Spacer(modifier = Modifier.height(12.dp))
-            Button(onClick = onPlaceBid, modifier = Modifier.fillMaxWidth()) {
-                Text("Place Bid")
+            if (hasAlreadyBided) {
+                OutlinedButton(
+                    onClick = {},
+                    enabled = false,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("You already placed a bid")
+                }
+            } else {
+                Button(onClick = onPlaceBid, modifier = Modifier.fillMaxWidth()) {
+                    Text("Place Bid")
+                }
             }
         }
     }
@@ -254,6 +320,11 @@ private fun BidDialog(
     val etaValue = etaMinutes.toIntOrNull()
     val etaIsValid = etaMinutes.isBlank() || (etaValue != null && etaValue in 1..1440)
 
+    val currentUid = remember { FirebaseAuth.getInstance().currentUser?.uid }
+    val bidRepository = remember { BidRepository() }
+    val bids by bidRepository.observeBidsForJob(job.jobId).collectAsState(initial = emptyList())
+    val hasAlreadyBided = bids.any { it.providerId == currentUid }
+
     AlertDialog(
         onDismissRequest = { if (!isSubmitting) onDismiss() },
         title = { Text(job.category) },
@@ -265,6 +336,47 @@ private fun BidDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(job.description, style = MaterialTheme.typography.bodyMedium)
+                val imageUrl = job.imageUrls.firstOrNull()
+                if (!imageUrl.isNullOrBlank()) {
+                    var showFullImage by remember { mutableStateOf(false) }
+                    SubcomposeAsyncImage(
+                        model = imageUrl,
+                        contentDescription = "Job Image",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(140.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { showFullImage = true },
+                        loading = {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                            }
+                        },
+                        error = {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Icon(imageVector = Icons.Outlined.BrokenImage, contentDescription = "Image error")
+                            }
+                        }
+                    )
+                    if (showFullImage) {
+                        AlertDialog(
+                            onDismissRequest = { showFullImage = false },
+                            title = { Text("Job Photo") },
+                            text = {
+                                SubcomposeAsyncImage(
+                                    model = imageUrl,
+                                    contentDescription = "Full Job Image",
+                                    modifier = Modifier.fillMaxWidth().height(350.dp),
+                                    contentScale = ContentScale.Fit
+                                )
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { showFullImage = false }) { Text("Close") }
+                            }
+                        )
+                    }
+                }
                 Text(
                     "Preferred: ${job.preferredDate} ${job.preferredTime}",
                     style = MaterialTheme.typography.bodySmall
@@ -275,39 +387,49 @@ private fun BidDialog(
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
-                OutlinedTextField(
-                    value = price,
-                    onValueChange = { value ->
-                        if (value.matches(Regex("^\\d*\\.?\\d*$"))) price = value
-                    },
-                    label = { Text("Price (Rs.) *") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true,
-                    enabled = !isSubmitting,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = message,
-                    onValueChange = { message = it },
-                    label = { Text("Message (optional)") },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !isSubmitting
-                )
-                OutlinedTextField(
-                    value = etaMinutes,
-                    onValueChange = { value ->
-                        if (value.all(Char::isDigit)) etaMinutes = value
-                    },
-                    label = { Text("Estimated arrival (minutes, optional)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    enabled = !isSubmitting,
-                    isError = !etaIsValid,
-                    supportingText = {
-                        if (!etaIsValid) Text("Enter a value from 1 to 1440 minutes.")
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                if (hasAlreadyBided) {
+                    Text(
+                        "You already placed a bid on this job.",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
+                    )
+                } else {
+                    OutlinedTextField(
+                        value = price,
+                        onValueChange = { value ->
+                            if (value.matches(Regex("^\\d*\\.?\\d*$"))) price = value
+                        },
+                        label = { Text("Price (Rs.) *") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        enabled = !isSubmitting,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = message,
+                        onValueChange = { message = it },
+                        label = { Text("Message (optional)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isSubmitting
+                    )
+                    OutlinedTextField(
+                        value = etaMinutes,
+                        onValueChange = { value ->
+                            if (value.all(Char::isDigit)) etaMinutes = value
+                        },
+                        label = { Text("Estimated arrival (minutes, optional)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        enabled = !isSubmitting,
+                        isError = !etaIsValid,
+                        supportingText = {
+                            if (!etaIsValid) Text("Enter a value from 1 to 1440 minutes.")
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
                 errorMessage?.let {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
@@ -315,19 +437,21 @@ private fun BidDialog(
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    if (priceValue != null && priceValue > 0.0 && etaIsValid) {
-                        onSubmit(priceValue, message, etaValue)
+            if (!hasAlreadyBided) {
+                Button(
+                    onClick = {
+                        if (priceValue != null && priceValue > 0.0 && etaIsValid) {
+                            onSubmit(priceValue, message, etaValue)
+                        }
+                    },
+                    enabled = !isSubmitting && priceValue != null && priceValue > 0.0 && etaIsValid,
+                    modifier = Modifier.fillMaxWidth().height(52.dp)
+                ) {
+                    if (isSubmitting) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Place Bid")
                     }
-                },
-                enabled = !isSubmitting && priceValue != null && priceValue > 0.0 && etaIsValid,
-                modifier = Modifier.fillMaxWidth().height(52.dp)
-            ) {
-                if (isSubmitting) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                } else {
-                    Text("Place Bid")
                 }
             }
         },

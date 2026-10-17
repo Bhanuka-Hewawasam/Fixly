@@ -51,9 +51,14 @@ class BidRepository(
                 return Result.failure(IllegalStateException("You can't bid on your own job."))
             }
 
+            val bidRef = firestore.collection("jobPosts").document(jobId).collection("bids").document(providerId)
             val userRef = firestore.collection("users").document(providerId)
             val aggregateRef = firestore.collection("providerRatingAggregates").document(providerId)
             val providerMetadata = firestore.runTransaction { transaction ->
+                val existingBid = transaction.get(bidRef)
+                if (existingBid.exists()) {
+                    throw IllegalStateException("You already placed a bid on this job.")
+                }
                 val userSnapshot = transaction.get(userRef)
                 val aggregateSnapshot = transaction.get(aggregateRef)
                 if (!aggregateSnapshot.exists()) {
@@ -87,7 +92,6 @@ class BidRepository(
                 .toObject(ProviderRatingAggregate::class.java)
             val categoryRating = providerRatings?.serviceRatings?.get(job.category)
 
-            val bidRef = firestore.collection("jobPosts").document(jobId).collection("bids").document()
             val bid = Bid(
                 bidId = bidRef.id,
                 jobId = jobId,
