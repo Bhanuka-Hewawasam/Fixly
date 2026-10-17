@@ -158,6 +158,8 @@ class BidRepository(
                     ?: throw IllegalStateException("Job has no service category")
                 val providerPhone = providerSnapshot.getString("phoneNumber")
                     ?.takeIf { it.isNotBlank() }
+                    ?: providerSnapshot.getString("phone")?.takeIf { it.isNotBlank() }
+                    ?: providerSnapshot.getString("phone_number")?.takeIf { it.isNotBlank() }
                     ?: throw IllegalStateException("Provider has no phone number on their profile.")
                 if (jobCustomerId != customerId) {
                     throw IllegalStateException("You can only select a bid for your own job.")
