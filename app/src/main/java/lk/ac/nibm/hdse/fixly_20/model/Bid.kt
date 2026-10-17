@@ -5,8 +5,8 @@ import java.util.Date
 
 /**
  * Firestore document: jobPosts/{jobId}/bids/{bidId}
- * providerRating / providerReviewCount are a snapshot of the provider's reputation
- * at the moment they placed the bid.
+ * providerRating / providerReviewCount are the category-specific rating snapshot
+ * for the job's service at the time this bid was placed.
  */
 data class Bid(
     val bidId: String = "",

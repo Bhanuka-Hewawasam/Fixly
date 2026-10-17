@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import lk.ac.nibm.hdse.fixly_20.data.remote.CloudinaryUploader
 import lk.ac.nibm.hdse.fixly_20.model.JobPost
+import lk.ac.nibm.hdse.fixly_20.model.JobStatusPolicy
 
 class JobRepository(
     private val firebaseAuth: FirebaseAuth = FirebaseAuth.getInstance(),
@@ -160,9 +161,27 @@ class JobRepository(
 
     suspend fun updateJobStatus(jobId: String, status: String): Result<Unit> {
         return try {
-            firestore.collection("jobPosts").document(jobId)
-                .update("status", status)
-                .await()
+            val providerId = firebaseAuth.currentUser?.uid
+                ?: throw IllegalStateException("Sign in to update this job.")
+            val jobRef = firestore.collection("jobPosts").document(jobId)
+            firestore.runTransaction { transaction ->
+                val snapshot = transaction.get(jobRef)
+                if (snapshot.getString("assignedProviderId") != providerId) {
+                    throw IllegalStateException("You can update only jobs assigned to you.")
+                }
+                val currentStatus = snapshot.getString("status")
+                val allowed = JobStatusPolicy.canProviderTransition(
+                    authenticatedProviderId = providerId,
+                    assignedProviderId = snapshot.getString("assignedProviderId"),
+                    currentStatus = currentStatus,
+                    nextStatus = status,
+                    hasAfterPhoto = !snapshot.getString("afterPhotoUrl").isNullOrBlank()
+                )
+                if (!allowed) {
+                    throw IllegalStateException("This job cannot be moved from $currentStatus to $status.")
+                }
+                transaction.update(jobRef, "status", status)
+            }.await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

@@ -424,10 +424,30 @@ private fun WaitingContent(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        "✅ Provider Accepted Your Request!",
+                        "Emergency",
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(MaterialTheme.colorScheme.error)
+                            .padding(horizontal = 12.dp, vertical = 5.dp),
+                        color = MaterialTheme.colorScheme.onError,
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        "Provider accepted your request",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "Help needed: ${alert.category}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    if (alert.note.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("Note: ${alert.note}", style = MaterialTheme.typography.bodySmall)
+                    }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         "Name: ${alert.acceptedProviderName ?: "Provider"}",

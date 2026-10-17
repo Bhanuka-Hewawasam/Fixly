@@ -446,6 +446,7 @@ class EmergencyAlertRepository(
                         "address" to "Emergency request location",
                         "status" to "Assigned",
                         "assignedProviderId" to providerId,
+                        "assignedProviderName" to verifiedName,
                         "emergencyAlertId" to alertId,
                         "customerConfirmed" to false,
                         "createdAt" to FieldValue.serverTimestamp()

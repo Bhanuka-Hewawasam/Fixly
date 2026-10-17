@@ -37,6 +37,7 @@ service cloud.firestore {
 
     function projectionMatchesUser(providerId) {
       let user = getAfter(/databases/$(database)/documents/users/$(providerId)).data;
+      let ratings = getAfter(/databases/$(database)/documents/providerRatingAggregates/$(providerId)).data;
       return user.uid == providerId
         && user.roles.hasAny(['provider'])
         && validServiceProfile(user)
@@ -50,12 +51,9 @@ service cloud.firestore {
         && request.resource.data.serviceRadiusKm == user.serviceRadiusKm
         && request.resource.data.serviceCategories == user.serviceCategories
         && request.resource.data.availableForEmergency == user.availableForEmergency
-        && request.resource.data.ratingCount == user.ratingCount
-        && request.resource.data.rating == (
-          user.keys().hasAny(['rating'])
-            ? user.rating
-            : (user.ratingCount > 0 ? user.ratingSum / user.ratingCount : 0)
-        )
+        && request.resource.data.ratingCount == ratings.ratingCount
+        && request.resource.data.rating == ratings.rating
+        && request.resource.data.serviceRatings == ratings.serviceRatings
         && request.resource.data.isVerified == user.isVerified
         && request.resource.data.verificationStatus == (
           user.keys().hasAny(['verificationStatus'])
@@ -96,20 +94,133 @@ service cloud.firestore {
         || (category == 'Other' && categories.hasAny(['Other']));
     }
 
-    function validProviderProjectionRatingUpdate(providerId) {
-      let userPath = /databases/$(database)/documents/users/$(providerId);
-      let user = getAfter(userPath).data;
-      let jobPath = /databases/$(database)/documents/jobPosts/$(user.lastRatingJobId);
+    function validReviewForJob(jobId, providerId) {
+      let jobPath = /databases/$(database)/documents/jobPosts/$(jobId);
+      let reviewPath = /databases/$(database)/documents/serviceReviews/$(jobId);
+      let job = get(jobPath).data;
+      let completedJob = getAfter(jobPath).data;
+      let review = getAfter(reviewPath).data;
       return signedIn()
-        && user.lastRatingJobId is string
-        && get(jobPath).data.customerId == request.auth.uid
-        && get(jobPath).data.assignedProviderId == providerId
-        && get(jobPath).data.customerConfirmed == false
-        && getAfter(jobPath).data.customerConfirmed == true
-        && getAfter(jobPath).data.status == 'Completed'
-        && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['rating', 'ratingCount', 'updatedAt'])
-        && projectionMatchesUser(providerId);
+        && exists(jobPath)
+        && existsAfter(reviewPath)
+        && job.customerId == request.auth.uid
+        && job.assignedProviderId == providerId
+        && job.customerId != providerId
+        && job.status == 'Completed'
+        && job.customerConfirmed == false
+        && job.category is string
+        && job.category.size() > 0
+        && completedJob.status == 'Completed'
+        && completedJob.customerConfirmed == true
+        && review.keys().hasOnly([
+          'bookingId', 'customerId', 'providerId', 'serviceCategory',
+          'rating', 'comment', 'createdAt'
+        ])
+        && review.bookingId == jobId
+        && review.customerId == request.auth.uid
+        && review.providerId == providerId
+        && review.serviceCategory == job.category
+        && review.rating is int
+        && review.rating >= 1
+        && review.rating <= 5
+        && review.comment is string
+        && review.comment.size() <= 1000
+        && review.createdAt == request.time;
+    }
+
+    function validFirstProviderRatingAggregate(providerId) {
+      let jobId = request.resource.data.lastRatingJobId;
+      let jobPath = /databases/$(database)/documents/jobPosts/$(jobId);
+      let reviewPath = /databases/$(database)/documents/serviceReviews/$(jobId);
+      let job = getAfter(jobPath).data;
+      let review = getAfter(reviewPath).data;
+      let categoryRating = request.resource.data.serviceRatings.get(job.category, {});
+      return signedIn()
+        && jobId is string
+        && validReviewForJob(jobId, providerId)
+        && request.resource.data.keys().hasOnly([
+          'providerId', 'ratingSum', 'ratingCount', 'rating', 'serviceRatings',
+          'availableForEmergency', 'lastRatingJobId', 'updatedAt'
+        ])
+        && request.resource.data.providerId == providerId
+        && request.resource.data.ratingSum == review.rating
+        && request.resource.data.ratingCount == 1
+        && request.resource.data.rating == review.rating
+        && request.resource.data.serviceRatings.keys().hasOnly([job.category])
+        && categoryRating.averageRating == review.rating
+        && categoryRating.reviewCount == 1
+        && request.resource.data.availableForEmergency == false
+        && request.resource.data.lastRatingJobId == jobId
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function validProviderRatingAggregateUpdate(providerId) {
+      let jobId = request.resource.data.lastRatingJobId;
+      let jobPath = /databases/$(database)/documents/jobPosts/$(jobId);
+      let reviewPath = /databases/$(database)/documents/serviceReviews/$(jobId);
+      let job = getAfter(jobPath).data;
+      let oldRatings = resource.data.get('serviceRatings', {});
+      let oldCategoryRating = oldRatings.get(job.category, {
+        'averageRating': 0,
+        'reviewCount': 0
+      });
+      let newCategoryRating = request.resource.data.serviceRatings.get(job.category, {});
+      return signedIn()
+        && jobId is string
+        && validReviewForJob(jobId, providerId)
+        && resource.data.providerId == providerId
+        && request.resource.data.providerId == providerId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'ratingSum', 'ratingCount', 'rating', 'serviceRatings',
+          'lastRatingJobId', 'updatedAt'
+        ])
+        && request.resource.data.lastRatingJobId == jobId
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.availableForEmergency == resource.data.availableForEmergency
+        && request.resource.data.ratingSum == resource.data.ratingSum + getAfter(reviewPath).data.rating
+        && request.resource.data.ratingCount == resource.data.ratingCount + 1
+        && request.resource.data.rating == request.resource.data.ratingSum
+          / request.resource.data.ratingCount
+        && request.resource.data.serviceRatings.diff(oldRatings).affectedKeys()
+          .hasOnly([job.category])
+        && newCategoryRating.reviewCount == oldCategoryRating.reviewCount + 1
+        && newCategoryRating.averageRating == (
+          oldCategoryRating.averageRating * oldCategoryRating.reviewCount
+            + getAfter(reviewPath).data.rating
+        ) / newCategoryRating.reviewCount;
+    }
+
+    function ownerCreatesProviderRatingAggregate(providerId) {
+      let user = getAfter(/databases/$(database)/documents/users/$(providerId)).data;
+      return isOwner(providerId)
+        && request.resource.data.keys().hasOnly([
+          'providerId', 'ratingSum', 'ratingCount', 'rating', 'serviceRatings',
+          'availableForEmergency', 'lastRatingJobId', 'updatedAt'
+        ])
+        && request.resource.data.providerId == providerId
+        && request.resource.data.ratingSum == user.ratingSum
+        && request.resource.data.ratingCount == user.ratingCount
+        && request.resource.data.rating == user.rating
+        && request.resource.data.serviceRatings == user.get('serviceRatings', {})
+        && request.resource.data.availableForEmergency == user.availableForEmergency
+        && request.resource.data.lastRatingJobId == user.get('lastRatingJobId', null)
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function ownerUpdatesProviderRatingAvailability(providerId) {
+      let user = getAfter(/databases/$(database)/documents/users/$(providerId)).data;
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return isOwner(providerId)
+        && resource.data.providerId == providerId
+        && request.resource.data.providerId == providerId
+        && changed.hasOnly(['availableForEmergency', 'updatedAt'])
+        && request.resource.data.ratingSum == resource.data.ratingSum
+        && request.resource.data.ratingCount == resource.data.ratingCount
+        && request.resource.data.rating == resource.data.rating
+        && request.resource.data.serviceRatings == resource.data.serviceRatings
+        && request.resource.data.lastRatingJobId == resource.data.lastRatingJobId
+        && request.resource.data.availableForEmergency == user.availableForEmergency
+        && request.resource.data.updatedAt == request.time;
     }
 
     function providerCanReadAlert(alertId, uid) {
@@ -133,36 +244,24 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/providerNotifications/$(alertId + "_" + uid)).data.status == 'ACTIVE';
     }
 
-    match /users/{uid} {
-      function validProviderRatingUpdate() {
-        let jobId = request.resource.data.lastRatingJobId;
-        let jobPath = /databases/$(database)/documents/jobPosts/$(jobId);
-        return signedIn()
-          && jobId is string
-          && get(jobPath).data.customerId == request.auth.uid
-          && get(jobPath).data.assignedProviderId == uid
-          && get(jobPath).data.customerConfirmed == false
-          && getAfter(jobPath).data.customerConfirmed == true
-          && getAfter(jobPath).data.status == 'Completed'
-          && getAfter(jobPath).data.rating is int
-          && getAfter(jobPath).data.rating >= 1
-          && getAfter(jobPath).data.rating <= 5
-          && getAfter(jobPath).data.diff(get(jobPath).data).affectedKeys()
-            .hasOnly(['customerConfirmed', 'rating', 'reviewComment'])
-          && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['ratingSum', 'ratingCount', 'rating', 'lastRatingJobId'])
-          && request.resource.data.ratingSum == resource.data.ratingSum + getAfter(jobPath).data.rating
-          && request.resource.data.ratingCount == resource.data.ratingCount + 1
-          && request.resource.data.rating == request.resource.data.ratingSum
-            / request.resource.data.ratingCount;
-      }
+    match /providerRatingAggregates/{providerId} {
+      allow read: if signedIn();
+      allow create: if ownerCreatesProviderRatingAggregate(providerId)
+        || validFirstProviderRatingAggregate(providerId);
+      allow update: if ownerUpdatesProviderRatingAvailability(providerId)
+        || validProviderRatingAggregateUpdate(providerId);
+      allow delete: if false;
+    }
 
+    match /users/{uid} {
       allow create: if isOwner(uid)
         && request.resource.data.uid == uid
         && request.resource.data.isVerified == false
         && request.resource.data.ratingSum == 0
         && request.resource.data.ratingCount == 0
         && request.resource.data.rating == 0
+        && (!request.resource.data.keys().hasAny(['serviceRatings'])
+          || request.resource.data.serviceRatings == {})
         && request.resource.data.verificationStatus == 'PENDING'
         && request.resource.data.suspended == false
         && !request.resource.data.keys().hasAny([
@@ -191,7 +290,10 @@ service cloud.firestore {
           && !request.resource.data.diff(resource.data).affectedKeys()
             .hasAny(['emergencyServiceLocation', 'emergencyServiceLocationUpdatedAt'])
           && !request.resource.data.diff(resource.data).affectedKeys()
-            .hasAny(['ratingSum', 'ratingCount', 'rating', 'lastRatingJobId', 'isVerified'])
+            .hasAny([
+              'ratingSum', 'ratingCount', 'rating', 'lastRatingJobId',
+              'serviceRatings', 'isVerified'
+            ])
           && !request.resource.data.diff(resource.data).affectedKeys()
             .hasAny([
               'emergencyAvailable', 'lastLocation', 'lastLocationAt',
@@ -205,7 +307,7 @@ service cloud.firestore {
             ])
             || (isProvider(uid) && validServiceProfile(request.resource.data))
           )
-        ) || validProviderRatingUpdate();
+        );
       allow delete: if false;
     }
 
@@ -213,13 +315,12 @@ service cloud.firestore {
       allow read: if signedIn()
         && resource.data.availableForEmergency == true
         && resource.data.suspended == false;
-      allow create, update: if (isOwner(providerId) ||
-          validProviderProjectionRatingUpdate(providerId))
+      allow create, update: if isOwner(providerId)
         && projectionMatchesUser(providerId)
         && request.resource.data.keys().hasOnly([
           'providerId', 'displayName', 'profilePhotoUrl', 'serviceAddress', 'serviceCity',
           'serviceLatitude', 'serviceLongitude', 'serviceRadiusKm', 'serviceCategories',
-          'availableForEmergency', 'rating', 'ratingCount', 'isVerified',
+          'availableForEmergency', 'rating', 'ratingCount', 'serviceRatings', 'isVerified',
           'verificationStatus', 'suspended', 'updatedAt'
         ]);
       allow delete: if false;
@@ -414,22 +515,85 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /bookingLocks/{lockId} {
+      allow read: if signedIn()
+        && (resource == null || resource.data.customerId == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'customerId', 'providerId', 'serviceCategory', 'jobId'
+        ])
+        && request.resource.data.customerId == request.auth.uid
+        && request.resource.data.providerId is string
+        && request.resource.data.serviceCategory is string
+        && lockId == request.auth.uid + '__' + request.resource.data.providerId
+          + '__' + request.resource.data.serviceCategory
+        && getAfter(/databases/$(database)/documents/jobPosts/$(request.resource.data.jobId)).data.customerId
+          == request.auth.uid
+        && getAfter(/databases/$(database)/documents/jobPosts/$(request.resource.data.jobId)).data.status
+          == 'Assigned'
+        && getAfter(/databases/$(database)/documents/jobPosts/$(request.resource.data.jobId)).data.assignedProviderId
+          == request.resource.data.providerId
+        && getAfter(/databases/$(database)/documents/jobPosts/$(request.resource.data.jobId)).data.category
+          == request.resource.data.serviceCategory
+        && getAfter(/databases/$(database)/documents/jobPosts/$(request.resource.data.jobId)).data.bookingLockId
+          == lockId;
+      allow delete: if signedIn()
+        && resource.data.customerId == request.auth.uid
+        && get(/databases/$(database)/documents/jobPosts/$(resource.data.jobId)).data.customerId
+          == request.auth.uid
+        && get(/databases/$(database)/documents/jobPosts/$(resource.data.jobId)).data.customerConfirmed == false
+        && getAfter(/databases/$(database)/documents/jobPosts/$(resource.data.jobId)).data.customerConfirmed == true
+        && getAfter(/databases/$(database)/documents/jobPosts/$(resource.data.jobId)).data.status == 'Completed';
+      allow update: if false;
+    }
+
+    match /serviceReviews/{bookingId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'bookingId', 'customerId', 'providerId', 'serviceCategory',
+          'rating', 'comment', 'createdAt'
+        ])
+        && request.resource.data.bookingId == bookingId
+        && request.resource.data.customerId == request.auth.uid
+        && request.resource.data.providerId is string
+        && validReviewForJob(bookingId, request.resource.data.providerId);
+      allow update, delete: if false;
+    }
+
     match /jobPosts/{jobId} {
       function customerOwnsJob() {
         return signedIn() && resource.data.customerId == request.auth.uid;
       }
       function validBidSelection() {
         let bidId = request.resource.data.selectedBidId;
+        let providerId = request.resource.data.assignedProviderId;
+        let category = resource.data.category;
+        let lockId = request.resource.data.bookingLockId;
+        let lockPath = /databases/$(database)/documents/bookingLocks/$(lockId);
         return resource.data.status == 'Open'
           && request.resource.data.status == 'Assigned'
           && bidId is string
+          && providerId is string
+          && category is string
+          && lockId == request.auth.uid + '__' + providerId + '__' + category
+          && existsAfter(lockPath)
+          && getAfter(lockPath).data.customerId == request.auth.uid
+          && getAfter(lockPath).data.providerId == providerId
+          && getAfter(lockPath).data.serviceCategory == category
+          && getAfter(lockPath).data.jobId == jobId
           && exists(/databases/$(database)/documents/jobPosts/$(jobId)/bids/$(bidId))
           && get(/databases/$(database)/documents/jobPosts/$(jobId)/bids/$(bidId)).data.providerId
-            == request.resource.data.assignedProviderId
+            == providerId
           && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['status', 'selectedBidId', 'assignedProviderId']);
+            .hasOnly([
+              'status', 'selectedBidId', 'assignedProviderId',
+              'assignedProviderName', 'bookingLockId'
+            ]);
       }
       function validCustomerReview() {
+        let reviewPath = /databases/$(database)/documents/serviceReviews/$(jobId);
+        let review = getAfter(reviewPath).data;
         return resource.data.status == 'Completed'
           && resource.data.customerConfirmed == false
           && request.resource.data.status == 'Completed'
@@ -437,11 +601,15 @@ service cloud.firestore {
           && request.resource.data.rating is int
           && request.resource.data.rating >= 1
           && request.resource.data.rating <= 5
+          && request.resource.data.rating == review.rating
+          && request.resource.data.reviewComment == review.comment
+          && validReviewForJob(jobId, resource.data.assignedProviderId)
           && request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['customerConfirmed', 'rating', 'reviewComment']);
       }
       function validCustomerSendBack() {
         return resource.data.status == 'Completed'
+          && resource.data.customerConfirmed == false
           && request.resource.data.status == 'In Progress'
           && request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['status', 'afterPhotoUrl'])
@@ -473,8 +641,8 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly([
             'jobId', 'customerId', 'customerName', 'category', 'description',
             'preferredDate', 'preferredTime', 'isEmergency', 'location', 'address',
-            'status', 'assignedProviderId', 'emergencyAlertId', 'customerConfirmed',
-            'createdAt'
+            'status', 'assignedProviderId', 'assignedProviderName', 'emergencyAlertId',
+            'customerConfirmed', 'createdAt'
           ])
           && request.resource.data.jobId == jobId
           && request.resource.data.customerId == alert.data.customerId
@@ -488,6 +656,7 @@ service cloud.firestore {
           && request.resource.data.address == 'Emergency request location'
           && request.resource.data.status == 'Assigned'
           && request.resource.data.assignedProviderId == request.auth.uid
+          && request.resource.data.assignedProviderName == alert.data.acceptedProviderName
           && request.resource.data.customerConfirmed == false
           && request.resource.data.createdAt == request.time
           && alert.data.status == 'ACCEPTED'

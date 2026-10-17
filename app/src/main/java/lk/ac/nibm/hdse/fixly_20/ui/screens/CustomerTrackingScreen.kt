@@ -102,7 +102,7 @@ private fun CompletedContent(
 
         if (job.customerConfirmed) {
             // ---------- Already reviewed: read-only ----------
-            Text("Your Review", style = MaterialTheme.typography.titleMedium)
+            Text("${job.category} Review", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(4.dp))
             StarRatingBar(rating = job.rating ?: 0)
 
@@ -112,9 +112,12 @@ private fun CompletedContent(
             }
         } else {
             // ---------- Confirm + review form ----------
-            Text("Happy with the work?", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Confirm the job and rate your provider.",
+                "Rate your ${job.category} experience with ${job.assignedProviderName ?: "your provider"}",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                "Confirm the completed work and share an optional comment.",
                 style = MaterialTheme.typography.bodySmall
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -124,7 +127,7 @@ private fun CompletedContent(
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedTextField(
                 value = comment,
-                onValueChange = { comment = it },
+                onValueChange = { if (it.length <= 1000) comment = it },
                 label = { Text("Write a review (optional)") },
                 minLines = 3,
                 modifier = Modifier.fillMaxWidth()

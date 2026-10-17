@@ -23,6 +23,7 @@ data class User(
     val ratingSum: Double = 0.0,   // total of all star ratings received as a provider
     val ratingCount: Int = 0,      // how many reviews that total came from
     val rating: Double = 0.0,
+    val serviceRatings: Map<String, ServiceRating> = emptyMap(),
 
     val serviceAddress: String = "",
     val serviceCity: String = "",
@@ -37,4 +38,8 @@ data class User(
     @get:Exclude
     val averageRating: Double
         get() = if (ratingCount > 0) ratingSum / ratingCount else 0.0
+
+    fun ratingForCategory(category: String): ServiceRating =
+        serviceRatings.entries.firstOrNull { it.key.equals(category, ignoreCase = true) }?.value
+            ?: ServiceRating()
 }

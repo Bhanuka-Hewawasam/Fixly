@@ -48,17 +48,27 @@ class UserRepository(
         require(serviceCategories.isNotEmpty()) { "Choose at least one service category." }
 
         val userRef = firestore.collection("users").document(uid)
+        val ratingAggregateRef = firestore.collection("providerRatingAggregates").document(uid)
         val projectionRef = firestore.collection("emergencyServiceAreas").document(uid)
         val contactRef = firestore.collection("emergencyProviderContacts").document(uid)
         firestore.runTransaction { transaction ->
             val snapshot = transaction.get(userRef)
+            val ratingAggregateSnapshot = transaction.get(ratingAggregateRef)
             val roles = snapshot.get("roles") as? List<*>
             require(roles?.contains("provider") == true) {
                 "Only a service provider can update service location."
             }
-            val ratingCount = snapshot.getLong("ratingCount")?.toInt()?.coerceAtLeast(0) ?: 0
-            val ratingSum = snapshot.getDouble("ratingSum") ?: 0.0
-            val rating = if (ratingCount > 0) ratingSum / ratingCount else 0.0
+            val ratingCount = ratingAggregateSnapshot.getLong("ratingCount")?.toInt()
+                ?.coerceAtLeast(0) ?: snapshot.getLong("ratingCount")?.toInt()?.coerceAtLeast(0) ?: 0
+            val ratingSum = ratingAggregateSnapshot.getDouble("ratingSum")
+                ?: snapshot.getDouble("ratingSum") ?: 0.0
+            val rating = ratingAggregateSnapshot.getDouble("rating")
+                ?: if (ratingCount > 0) ratingSum / ratingCount else 0.0
+            val serviceRatings = ratingAggregateSnapshot.get("serviceRatings")
+                ?: snapshot.get("serviceRatings")
+                ?: emptyMap<String, Any>()
+            val lastRatingJobId = ratingAggregateSnapshot.getString("lastRatingJobId")
+                ?: snapshot.getString("lastRatingJobId")
             val isVerified = snapshot.getBoolean("isVerified") == true
             val verificationStatus = snapshot.getString("verificationStatus") ?: if (isVerified) "VERIFIED" else "PENDING"
             val suspended = snapshot.getBoolean("suspended") == true
@@ -74,6 +84,19 @@ class UserRepository(
             )
             transaction.update(userRef, serviceFields)
             transaction.set(
+                ratingAggregateRef,
+                mapOf(
+                    "providerId" to uid,
+                    "ratingSum" to ratingSum,
+                    "ratingCount" to ratingCount,
+                    "rating" to rating,
+                    "serviceRatings" to serviceRatings,
+                    "availableForEmergency" to availableForEmergency,
+                    "lastRatingJobId" to lastRatingJobId,
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+            )
+            transaction.set(
                 projectionRef,
                 mapOf(
                     "providerId" to uid,
@@ -88,6 +111,7 @@ class UserRepository(
                     "availableForEmergency" to availableForEmergency,
                     "rating" to rating,
                     "ratingCount" to ratingCount,
+                    "serviceRatings" to serviceRatings,
                     "isVerified" to isVerified,
                     "verificationStatus" to verificationStatus,
                     "suspended" to suspended,

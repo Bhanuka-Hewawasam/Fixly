@@ -63,7 +63,12 @@ object EmergencyProviderMatcher {
             ProviderMatch(provider, distance)
         }.sortedWith(
             compareBy<ProviderMatch> { it.distanceKm }
-                .thenByDescending { it.provider.averageRating }
+                .thenByDescending {
+                    if (category == "Any" || category == "Any Available Provider") {
+                        it.provider.averageRating
+                    }
+                    else it.provider.ratingForCategory(category).averageRating
+                }
                 .thenByDescending { it.provider.isVerified }
         )
     }

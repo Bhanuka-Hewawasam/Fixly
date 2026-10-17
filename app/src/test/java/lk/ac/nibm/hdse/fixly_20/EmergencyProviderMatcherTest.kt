@@ -4,6 +4,7 @@ import com.google.firebase.firestore.GeoPoint
 import lk.ac.nibm.hdse.fixly_20.model.EmergencyAlertPolicy
 import lk.ac.nibm.hdse.fixly_20.model.EmergencyLocationPolicy
 import lk.ac.nibm.hdse.fixly_20.model.User
+import lk.ac.nibm.hdse.fixly_20.model.ServiceRating
 import lk.ac.nibm.hdse.fixly_20.util.EmergencyProviderMatcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -90,6 +91,33 @@ class EmergencyProviderMatcherTest {
         )
 
         assertEquals(listOf("verified", "higher", "lower", "farther"), matches.map { it.provider.uid })
+    }
+
+    @Test
+    fun categorySearchSortsByThatServiceRatingInsteadOfOverallRating() {
+        val strongOverallWeakPlumber = provider(
+            "overall-only",
+            near(0.02),
+            ratingSum = 5.0,
+            ratingCount = 1
+        ).copy(serviceRatings = mapOf("Plumber" to ServiceRating(2.0, 1)))
+        val lowOverallStrongPlumber = provider(
+            "plumber-rated",
+            near(0.02),
+            ratingSum = 1.0,
+            ratingCount = 1
+        ).copy(serviceRatings = mapOf("Plumber" to ServiceRating(5.0, 1)))
+
+        val matches = EmergencyProviderMatcher.findMatches(
+            listOf(strongOverallWeakPlumber, lowOverallStrongPlumber),
+            customer,
+            "Plumber",
+            25,
+            null,
+            null
+        )
+
+        assertEquals(listOf("plumber-rated", "overall-only"), matches.map { it.provider.uid })
     }
 
     @Test

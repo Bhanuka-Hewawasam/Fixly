@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -60,8 +61,14 @@ import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
 import lk.ac.nibm.hdse.fixly_20.ui.components.BottomNavItem
 import lk.ac.nibm.hdse.fixly_20.ui.components.FixlyBottomNavBar
+import lk.ac.nibm.hdse.fixly_20.data.repository.ServiceReviewRepository
+import lk.ac.nibm.hdse.fixly_20.data.repository.ProviderRatingRepository
+import lk.ac.nibm.hdse.fixly_20.model.ProviderRatingAggregate
+import lk.ac.nibm.hdse.fixly_20.model.ServiceReview
+import lk.ac.nibm.hdse.fixly_20.model.ServiceRating
 import lk.ac.nibm.hdse.fixly_20.viewmodel.ProviderAvailabilityViewModel
 import java.util.Locale
+import kotlinx.coroutines.flow.flowOf
 
 private val providerServiceCategories = listOf(
     "Vehicle Mechanic",
@@ -84,6 +91,23 @@ fun ProfileScreen(
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
+    val reviewRepository = remember { ServiceReviewRepository() }
+    val ratingRepository = remember { ProviderRatingRepository() }
+    val providerId = uiState.user?.uid
+    val reviewsFlow = remember(providerId) {
+        providerId?.let(reviewRepository::observeProviderReviews)
+            ?: flowOf(Result.success(emptyList<ServiceReview>()))
+    }
+    val reviewResult by reviewsFlow.collectAsState(initial = Result.success(emptyList<ServiceReview>()))
+    val ratingFlow = remember(providerId) {
+        providerId?.let(ratingRepository::observe)
+            ?: flowOf(Result.success<ProviderRatingAggregate?>(null))
+    }
+    val ratingResult by ratingFlow.collectAsState(
+        initial = Result.success<ProviderRatingAggregate?>(null)
+    )
+    val providerReviews = reviewResult.getOrNull().orEmpty()
+    var selectedReviewCategory by remember(providerId) { mutableStateOf("All") }
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     var address by remember { mutableStateOf("") }
     var city by remember { mutableStateOf("") }
@@ -303,6 +327,7 @@ fun ProfileScreen(
                                         )
                                     }
                                 }
+                                }
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
@@ -310,8 +335,9 @@ fun ProfileScreen(
                                     Text(
                                         if (availableForEmergency) {
                                             "After saving, your registered service location stays visible after logout. Sign in to respond to customer requests."
-                                        }
-                                        else "After saving, your service location will be hidden from emergency search.",
+                                        } else {
+                                            "After saving, your service location will be hidden from emergency search."
+                                        },
                                         style = MaterialTheme.typography.bodySmall
                                     )
                                 }
@@ -346,8 +372,91 @@ fun ProfileScreen(
                             }
                         }
                     }
+                    ProviderReviewsSection(
+                        reviews = providerReviews,
+                        categories = (
+                            uiState.user?.serviceCategories.orEmpty() +
+                                providerReviews.map { it.serviceCategory }
+                            ).distinct(),
+                        offeredCategories = uiState.user?.serviceCategories.orEmpty(),
+                        serviceRatings = ratingResult.getOrNull()?.serviceRatings
+                            ?: uiState.user?.serviceRatings.orEmpty(),
+                        selectedCategory = selectedReviewCategory,
+                        onCategorySelected = { selectedReviewCategory = it },
+                        errorMessage = reviewResult.exceptionOrNull()?.localizedMessage
+                            ?: ratingResult.exceptionOrNull()?.localizedMessage
+                    )
                 }
             }
         }
-    }
+}
+
+@Composable
+private fun ProviderReviewsSection(
+    reviews: List<ServiceReview>,
+    categories: List<String>,
+    offeredCategories: List<String>,
+    serviceRatings: Map<String, ServiceRating>,
+    selectedCategory: String,
+    onCategorySelected: (String) -> Unit,
+    errorMessage: String?
+) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(
+            Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                "Service Reviews",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                (listOf("All") + categories + "Other categories").distinct().forEach { category ->
+                    FilterChip(
+                        selected = selectedCategory == category,
+                        onClick = { onCategorySelected(category) },
+                        label = {
+                            val rating = serviceRatings[category]
+                            Text(
+                                if (rating != null && rating.reviewCount > 0) {
+                                    "$category · ${String.format(Locale.US, "%.1f", rating.averageRating)} (${rating.reviewCount})"
+                                } else category
+                            )
+                        }
+                    )
+                }
+            }
+            errorMessage?.let {
+                Text("Couldn't load reviews: $it", color = MaterialTheme.colorScheme.error)
+            }
+            val filteredReviews = when (selectedCategory) {
+                "All" -> reviews
+                "Other categories" -> reviews.filter { it.serviceCategory !in offeredCategories }
+                else -> reviews.filter { it.serviceCategory == selectedCategory }
+            }
+            if (filteredReviews.isEmpty()) {
+                Text(
+                    if (reviews.isEmpty()) "No customer reviews yet."
+                    else "No reviews for $selectedCategory.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            } else {
+                filteredReviews.forEach { review ->
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(
+                            "${review.serviceCategory} · ${review.rating}/5",
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        if (review.comment.isNotBlank()) {
+                            Text(review.comment, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+}
+            }
+        }
 }

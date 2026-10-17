@@ -465,7 +465,7 @@ fun EmergencyScreen(
                                             "Try another service or a wider search radius. Providers must have Emergency Availability enabled and a registered service location within their service radius.",
                                         textAlign = TextAlign.Center
                                     )
-                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Spacer(Modifier.height(12.dp))
                                     Button(onClick = onPostUrgentJob) { Text("Post an Urgent Job") }
                                 }
                             }
@@ -480,6 +480,7 @@ fun EmergencyScreen(
                                 items(displayedProviders, key = { it.provider.uid }) { item ->
                                     ProviderCard(
                                         item = item,
+                                        category = uiState.selectedCategory,
                                         isSelected = selectedProvider?.provider?.uid == item.provider.uid,
                                         onClick = {
                                             selectedProvider = item
@@ -754,6 +755,31 @@ fun EmergencyScreen(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(
+                                        "Emergency",
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(50))
+                                            .background(MaterialTheme.colorScheme.error)
+                                            .padding(horizontal = 12.dp, vertical = 5.dp),
+                                        color = MaterialTheme.colorScheme.onError,
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Text(
+                                        "Provider accepted your request",
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        "Help needed: ${alert?.category ?: "Emergency assistance"}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    if (!alert?.note.isNullOrBlank()) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text("Note: ${alert?.note}", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
                                     Text("Provider: ${alert?.acceptedProviderName ?: "Provider"}", style = MaterialTheme.typography.titleMedium)
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text("Phone: ${alert?.acceptedProviderPhone ?: "N/A"}")
@@ -983,11 +1009,13 @@ fun EmergencyScreen(
 @Composable
 private fun ProviderCard(
     item: ProviderWithDistance,
+    category: String,
     isSelected: Boolean,
     onClick: () -> Unit,
     onRequestHelp: () -> Unit
 ) {
     val provider = item.provider
+    val categoryRating = provider.ratingForCategory(category)
     val distanceText = String.format(Locale.getDefault(), "%.1f", item.distanceKm)
     Card(
         modifier = Modifier
@@ -1023,11 +1051,18 @@ private fun ProviderCard(
                         )
                     }
                 }
+
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(provider.name, style = MaterialTheme.typography.titleMedium)
                     Text(
-                        formatRating(provider.averageRating, provider.ratingCount),
+                        if (categoryRating.reviewCount > 0) {
+                            formatRating(categoryRating.averageRating, categoryRating.reviewCount)
+                        } else if (category == "Any Available Provider" || category == "Any") {
+                            "Overall ${formatRating(provider.averageRating, provider.ratingCount)}"
+                        } else {
+                            "No reviews for $category yet"
+                        },
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -1061,7 +1096,8 @@ private fun ProviderCard(
             Text(
                 listOf(provider.serviceAddress, provider.serviceCity)
                     .filter { it.isNotBlank() }
-                    .joinToString(", "),
+                    .joinToString(", ")
+                    .ifBlank { "Location selected on map" },
                 style = MaterialTheme.typography.bodyMedium
             )
             Text(
@@ -1094,14 +1130,14 @@ private fun ProviderCard(
                     onClick = onRequestHelp,
                     enabled = !item.isDemo,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp)
                 ) {
                     Text(if (item.isDemo) "Sample only" else "Request help")
                 }
                 OutlinedButton(
                     onClick = onClick,
                     enabled = !isSelected,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp)
                 ) {
                     Text(if (isSelected) "Selected" else "View on map")
                 }
