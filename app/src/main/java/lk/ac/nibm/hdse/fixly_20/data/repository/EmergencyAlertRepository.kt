@@ -166,7 +166,8 @@ class EmergencyAlertRepository(
                 "acceptedProviderId" to null,
                 "acceptedProviderName" to null,
                 "acceptedProviderPhone" to null,
-                "acceptedAt" to null
+                "acceptedAt" to null,
+                "jobPostId" to null
             )
             transaction.set(alertRef, alertData)
             transaction.set(
@@ -330,7 +331,7 @@ class EmergencyAlertRepository(
     suspend fun acceptAlert(
         alertId: String,
         providerId: String
-    ): Result<Unit> {
+    ): Result<String> {
         return try {
             val authUid = firebaseAuth.currentUser?.uid
                 ?: return Result.failure(IllegalStateException("Please sign in to accept this request"))
@@ -344,7 +345,9 @@ class EmergencyAlertRepository(
                 Log.d(TAG, "DEBUG: 4. Firestore request document path: emergencyAlerts/$alertId")
             }
 
-            firestore.runTransaction { transaction ->
+            val jobPostId = "emergency_$alertId"
+            val jobRef = firestore.collection("jobPosts").document(jobPostId)
+            val createdJobPostId = firestore.runTransaction { transaction ->
                 val ref = alerts.document(alertId)
                 val notificationRef = firestore.collection("providerNotifications")
                     .document("${alertId}_$providerId")
@@ -354,7 +357,17 @@ class EmergencyAlertRepository(
                 val notification = transaction.get(notificationRef)
                 val provider = transaction.get(providerRef)
                 val serviceArea = transaction.get(serviceAreaRef)
+                val existingJob = transaction.get(jobRef)
                 val status = snapshot.getString("status") ?: "ACTIVE"
+
+                if (status == "ACCEPTED" &&
+                    snapshot.getString("acceptedProviderId") == providerId &&
+                    snapshot.getString("jobPostId") == jobPostId &&
+                    existingJob.exists()
+                ) {
+                    return@runTransaction jobPostId
+                }
+
                 val selectedProviderId = snapshot.getString("selectedProviderId")
                 val expiresAtMs = snapshot.getDate("expiresAt")?.time ?: 0L
                 val nowMs = System.currentTimeMillis()
@@ -414,6 +427,30 @@ class EmergencyAlertRepository(
                     ?: throw IllegalStateException("Complete your provider profile before accepting")
                 val verifiedPhone = provider.getString("phoneNumber")
                     ?: throw IllegalStateException("Add a phone number to your provider profile before accepting")
+                if (existingJob.exists()) {
+                    throw IllegalStateException("An emergency job already exists for this request")
+                }
+
+                transaction.set(
+                    jobRef,
+                    mapOf(
+                        "jobId" to jobPostId,
+                        "customerId" to snapshot.getString("customerId").orEmpty(),
+                        "customerName" to snapshot.getString("customerName").orEmpty(),
+                        "category" to category,
+                        "description" to snapshot.getString("note").orEmpty(),
+                        "preferredDate" to "",
+                        "preferredTime" to "",
+                        "isEmergency" to true,
+                        "location" to customerLocation,
+                        "address" to "Emergency request location",
+                        "status" to "Assigned",
+                        "assignedProviderId" to providerId,
+                        "emergencyAlertId" to alertId,
+                        "customerConfirmed" to false,
+                        "createdAt" to FieldValue.serverTimestamp()
+                    )
+                )
                 transaction.update(
                     ref,
                     mapOf(
@@ -421,13 +458,15 @@ class EmergencyAlertRepository(
                         "acceptedProviderId" to providerId,
                         "acceptedProviderName" to verifiedName,
                         "acceptedProviderPhone" to verifiedPhone,
-                        "acceptedAt" to FieldValue.serverTimestamp()
+                        "acceptedAt" to FieldValue.serverTimestamp(),
+                        "jobPostId" to jobPostId
                     )
                 )
                 transaction.update(
                     notificationRef,
                     mapOf("status" to "ACCEPTED", "isRead" to true)
                 )
+                jobPostId
             }.await()
 
             if (BuildConfig.DEBUG) {
@@ -435,7 +474,7 @@ class EmergencyAlertRepository(
                 Log.d(TAG, "DEBUG: 8. Firestore status after acceptance: ACCEPTED")
             }
 
-            Result.success(Unit)
+            Result.success(createdJobPostId)
         } catch (e: Exception) {
             val errorMsg = e.localizedMessage ?: "Unknown error"
             if (BuildConfig.DEBUG) {

@@ -23,6 +23,7 @@ data class EmergencyAlert(
     val acceptedProviderId: String? = null,
     val acceptedProviderName: String? = null,
     val acceptedProviderPhone: String? = null,
+    val jobPostId: String? = null,
     @ServerTimestamp val acceptedAt: Date? = null
 )
 

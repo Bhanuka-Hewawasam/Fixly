@@ -270,7 +270,8 @@ service cloud.firestore {
         && request.resource.data.keys().hasAll([
           'customerName', 'customerPhone', 'category', 'note', 'location',
           'status', 'createdAt', 'expiresAt', 'selectedProviderId',
-          'acceptedProviderId', 'acceptedProviderName', 'acceptedProviderPhone', 'acceptedAt'
+          'acceptedProviderId', 'acceptedProviderName', 'acceptedProviderPhone', 'acceptedAt',
+          'jobPostId'
         ])
         && request.resource.data.status == 'ACTIVE'
         && request.resource.data.createdAt == request.time
@@ -284,6 +285,7 @@ service cloud.firestore {
         && request.resource.data.acceptedProviderName == null
         && request.resource.data.acceptedProviderPhone == null
         && request.resource.data.acceptedAt == null
+        && request.resource.data.jobPostId == null
         && getAfter(/databases/$(database)/documents/emergencyCustomerState/$(request.auth.uid)).data.activeAlertId == alertId
         && (
           request.resource.data.selectedProviderId == null
@@ -326,8 +328,11 @@ service cloud.firestore {
             && request.resource.data.acceptedAt == request.time
             && request.resource.data.acceptedProviderName == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.name
             && request.resource.data.acceptedProviderPhone == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.phoneNumber
+            && request.resource.data.jobPostId == 'emergency_' + alertId
+            && getAfter(/databases/$(database)/documents/jobPosts/$(request.resource.data.jobPostId)).data.emergencyAlertId == alertId
+            && getAfter(/databases/$(database)/documents/jobPosts/$(request.resource.data.jobPostId)).data.assignedProviderId == request.auth.uid
             && request.resource.data.diff(resource.data).affectedKeys()
-              .hasOnly(['status', 'acceptedProviderId', 'acceptedProviderName', 'acceptedProviderPhone', 'acceptedAt'])
+              .hasOnly(['status', 'acceptedProviderId', 'acceptedProviderName', 'acceptedProviderPhone', 'acceptedAt', 'jobPostId'])
           )
         );
       allow delete: if false;
@@ -458,9 +463,41 @@ service cloud.firestore {
               && changed.hasOnly(['providerLocation', 'beforePhotoUrl', 'afterPhotoUrl']))
           );
       }
-      allow create: if signedIn()
+      function validEmergencyAcceptanceJob() {
+        let alertId = request.resource.data.emergencyAlertId;
+        let alert = getAfter(/databases/$(database)/documents/emergencyAlerts/$(alertId));
+        return signedIn()
+          && isProvider(request.auth.uid)
+          && alertId is string
+          && jobId == 'emergency_' + alertId
+          && request.resource.data.keys().hasOnly([
+            'jobId', 'customerId', 'customerName', 'category', 'description',
+            'preferredDate', 'preferredTime', 'isEmergency', 'location', 'address',
+            'status', 'assignedProviderId', 'emergencyAlertId', 'customerConfirmed',
+            'createdAt'
+          ])
+          && request.resource.data.jobId == jobId
+          && request.resource.data.customerId == alert.data.customerId
+          && request.resource.data.customerName == alert.data.customerName
+          && request.resource.data.category == alert.data.category
+          && request.resource.data.description == alert.data.note
+          && request.resource.data.preferredDate == ''
+          && request.resource.data.preferredTime == ''
+          && request.resource.data.isEmergency == true
+          && request.resource.data.location == alert.data.location
+          && request.resource.data.address == 'Emergency request location'
+          && request.resource.data.status == 'Assigned'
+          && request.resource.data.assignedProviderId == request.auth.uid
+          && request.resource.data.customerConfirmed == false
+          && request.resource.data.createdAt == request.time
+          && alert.data.status == 'ACCEPTED'
+          && alert.data.acceptedProviderId == request.auth.uid
+          && alert.data.jobPostId == jobId;
+      }
+      allow create: if (signedIn()
         && request.resource.data.customerId == request.auth.uid
-        && request.resource.data.status == 'Open';
+        && request.resource.data.status == 'Open')
+        || validEmergencyAcceptanceJob();
       allow read: if signedIn()
         && (resource.data.status == 'Open'
           || resource.data.customerId == request.auth.uid

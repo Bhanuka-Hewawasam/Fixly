@@ -24,6 +24,7 @@ data class JobPost(
     val status: String = "Open",            // Open -> Assigned -> In Progress -> Completed
     val selectedBidId: String? = null,
     val assignedProviderId: String? = null,
+    val emergencyAlertId: String? = null,
     val providerLocation: GeoPoint? = null,
     val beforePhotoUrl: String? = null,
     val afterPhotoUrl: String? = null,

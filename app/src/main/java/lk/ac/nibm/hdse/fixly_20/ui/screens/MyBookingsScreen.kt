@@ -72,6 +72,13 @@ private fun BookingCard(
                 Text(job.category, style = MaterialTheme.typography.titleMedium)
                 AssistChip(onClick = {}, label = { Text(job.status) })
             }
+            if (job.isEmergency) {
+                Text(
+                    "Emergency request",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.labelMedium
+                )
+            }
             Spacer(modifier = Modifier.height(6.dp))
             Text(job.description, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
             Spacer(modifier = Modifier.height(12.dp))

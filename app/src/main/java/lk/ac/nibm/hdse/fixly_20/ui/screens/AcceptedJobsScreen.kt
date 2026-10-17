@@ -38,7 +38,7 @@ fun AcceptedJobsScreen(
             }
             uiState.jobs.isEmpty() -> {
                 Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    Text("No active jobs yet. Bids you win will show up here.")
+                    Text("Jobs you accept or win through bids will show up here.")
                 }
             }
             else -> {
@@ -63,6 +63,13 @@ private fun AcceptedJobCard(job: JobPost, onClick: () -> Unit) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(job.category, style = MaterialTheme.typography.titleMedium)
                 AssistChip(onClick = {}, label = { Text(job.status) })
+            }
+            if (job.isEmergency) {
+                Text(
+                    "Emergency request",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.labelMedium
+                )
             }
             Spacer(modifier = Modifier.height(6.dp))
             Text(job.description, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
