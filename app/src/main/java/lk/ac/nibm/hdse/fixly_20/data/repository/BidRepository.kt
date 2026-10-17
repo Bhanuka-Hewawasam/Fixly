@@ -27,11 +27,15 @@ class BidRepository(
         jobId: String,
         providerName: String,
         price: Double,
-        message: String
+        message: String,
+        distanceKm: Double
     ): Result<Unit> {
         return try {
             val providerId = firebaseAuth.currentUser?.uid
                 ?: return Result.failure(IllegalStateException("No logged-in user"))
+            require(distanceKm.isFinite() && distanceKm >= 0.0) {
+                "A valid distance is required to place a bid."
+            }
 
             val job = firestore.collection("jobPosts").document(jobId).get().await()
                 .toObject(JobPost::class.java)
@@ -42,7 +46,7 @@ class BidRepository(
 
             val userRef = firestore.collection("users").document(providerId)
             val aggregateRef = firestore.collection("providerRatingAggregates").document(providerId)
-            firestore.runTransaction { transaction ->
+            val providerMetadata = firestore.runTransaction { transaction ->
                 val userSnapshot = transaction.get(userRef)
                 val aggregateSnapshot = transaction.get(aggregateRef)
                 if (!aggregateSnapshot.exists()) {
@@ -67,6 +71,10 @@ class BidRepository(
                         )
                     )
                 }
+                Pair(
+                    userSnapshot.getBoolean("isVerified") == true,
+                    userSnapshot.getString("certificateUrl")?.takeIf { it.isNotBlank() }
+                )
             }.await()
             val providerRatings = aggregateRef.get().await()
                 .toObject(ProviderRatingAggregate::class.java)
@@ -81,7 +89,12 @@ class BidRepository(
                 price = price,
                 message = message,
                 providerRating = categoryRating?.averageRating ?: 0.0,
-                providerReviewCount = categoryRating?.reviewCount ?: 0
+                providerReviewCount = categoryRating?.reviewCount ?: 0,
+                ratingAvg = categoryRating?.averageRating ?: 0.0,
+                ratingCount = categoryRating?.reviewCount ?: 0,
+                isCertified = providerMetadata.first,
+                certificateUrl = providerMetadata.second,
+                distanceKm = distanceKm
             )
             val bidBatch = firestore.batch()
             bidBatch.set(bidRef, bid)
@@ -165,8 +178,16 @@ class BidRepository(
                         "providerPhone" to providerPhone,
                         "providerCertificateUrl" to providerSnapshot.getString("certificateUrl"),
                         "acceptedBidPrice" to bid.price,
-                        "acceptedProviderRating" to bid.providerRating,
-                        "acceptedProviderReviewCount" to bid.providerReviewCount,
+                        "acceptedProviderRating" to (
+                            if (bid.ratingCount == 0 && bid.providerReviewCount > 0) {
+                                bid.providerRating
+                            } else {
+                                bid.ratingAvg
+                            }
+                        ),
+                        "acceptedProviderReviewCount" to (
+                            if (bid.ratingCount == 0) bid.providerReviewCount else bid.ratingCount
+                        ),
                         "bookingLockId" to lockId,
                         "status" to "Accepted"
                     )

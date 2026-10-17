@@ -86,9 +86,27 @@ class AvailableJobsViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isSubmittingBid = true, errorMessage = null) }
 
+            val currentState = _uiState.value
+            val jobLocation = currentState.allJobs.firstOrNull { it.jobId == jobId }?.location
+            val providerLocation = currentState.providerLocation
+            if (jobLocation == null || providerLocation == null) {
+                _uiState.update {
+                    it.copy(
+                        isSubmittingBid = false,
+                        errorMessage = "Could not calculate the job distance. Refresh your location and try again."
+                    )
+                }
+                return@launch
+            }
+            val distanceKm = DistanceUtils.distanceKm(
+                providerLocation.latitude,
+                providerLocation.longitude,
+                jobLocation.latitude,
+                jobLocation.longitude
+            )
             val providerName = userRepository.getCurrentUserProfile().getOrNull()?.name ?: "Provider"
 
-            bidRepository.submitBid(jobId, providerName, price, message)
+            bidRepository.submitBid(jobId, providerName, price, message, distanceKm)
                 .onSuccess {
                     _uiState.update { it.copy(isSubmittingBid = false, bidSubmittedJobId = jobId) }
                 }
