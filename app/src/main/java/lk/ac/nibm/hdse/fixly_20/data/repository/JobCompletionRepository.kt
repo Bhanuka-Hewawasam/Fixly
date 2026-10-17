@@ -24,25 +24,44 @@ class JobCompletionRepository(
 
             val jobRef = firestore.collection("jobPosts").document(job.jobId)
             val providerRef = firestore.collection("users").document(providerId)
-
-            val batch = firestore.batch()
-            batch.update(
-                jobRef,
-                mapOf(
-                    "customerConfirmed" to true,
-                    "rating" to rating,
-                    "reviewComment" to comment
+            val emergencyAreaRef = firestore.collection("emergencyServiceAreas").document(providerId)
+            firestore.runTransaction { transaction ->
+                val jobSnapshot = transaction.get(jobRef)
+                val providerSnapshot = transaction.get(providerRef)
+                val emergencyAreaSnapshot = transaction.get(emergencyAreaRef)
+                if (jobSnapshot.getBoolean("customerConfirmed") == true) {
+                    throw IllegalStateException("This job has already been reviewed.")
+                }
+                val updatedSum = (providerSnapshot.getDouble("ratingSum") ?: 0.0) + rating
+                val updatedCount = (providerSnapshot.getLong("ratingCount") ?: 0L) + 1L
+                transaction.update(
+                    jobRef,
+                    mapOf(
+                        "customerConfirmed" to true,
+                        "rating" to rating,
+                        "reviewComment" to comment
+                    )
                 )
-            )
-            batch.update(
-                providerRef,
-                mapOf(
-                    "ratingSum" to FieldValue.increment(rating.toDouble()),
-                    "ratingCount" to FieldValue.increment(1L),
-                    "lastRatingJobId" to job.jobId
+                transaction.update(
+                    providerRef,
+                    mapOf(
+                        "ratingSum" to updatedSum,
+                        "ratingCount" to updatedCount,
+                        "rating" to updatedSum / updatedCount,
+                        "lastRatingJobId" to job.jobId
+                    )
                 )
-            )
-            batch.commit().await()
+                if (emergencyAreaSnapshot.exists()) {
+                    transaction.update(
+                        emergencyAreaRef,
+                        mapOf(
+                            "rating" to updatedSum / updatedCount,
+                            "ratingCount" to updatedCount,
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        )
+                    )
+                }
+            }.await()
 
             Result.success(Unit)
         } catch (e: Exception) {

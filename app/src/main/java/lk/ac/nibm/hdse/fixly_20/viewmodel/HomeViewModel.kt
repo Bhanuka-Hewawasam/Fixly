@@ -1,7 +1,7 @@
 package lk.ac.nibm.hdse.fixly_20.viewmodel
 
-import android.content.Context
 import android.net.Uri
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -194,7 +194,18 @@ class HomeViewModel(
         _uiState.value = _uiState.value.copy(activeRole = role)
     }
 
-    fun logout() {
-        authRepository.logout()
+    fun logout(onComplete: () -> Unit, onError: (String) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                authRepository.logout()
+                _uiState.value = HomeUiState(isLoading = true)
+                onComplete()
+            } catch (error: Exception) {
+                Log.e("HomeViewModel", "Couldn't log out", error)
+                val message = error.localizedMessage ?: "Couldn't log out."
+                _uiState.value = _uiState.value.copy(errorMessage = message)
+                onError(message)
+            }
+        }
     }
 }

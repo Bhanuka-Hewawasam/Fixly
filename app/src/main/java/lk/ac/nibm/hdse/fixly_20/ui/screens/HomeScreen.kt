@@ -60,6 +60,7 @@ fun HomeScreen(
     onViewAvailableJobs: () -> Unit,
     onViewAcceptedJobs: () -> Unit,
     onEmergency: () -> Unit,
+    onProfile: (String) -> Unit,
     viewModel: HomeViewModel = viewModel()
 ) {
     val context = LocalContext.current
@@ -102,6 +103,7 @@ fun HomeScreen(
                             "available_jobs" -> onViewAvailableJobs()
                             "accepted_jobs" -> onViewAcceptedJobs()
                             "emergency_sos" -> onEmergency()
+                            "profile" -> onProfile(uiState.activeRole)
                         }
                     }
                 )
@@ -562,8 +564,7 @@ fun HomeScreen(
                             .clip(RoundedCornerShape(14.dp))
                             .clickable {
                                 showProfileSheet = false
-                                viewModel.logout()
-                                onLogout()
+                                viewModel.logout(onComplete = onLogout)
                             }
                             .padding(vertical = 12.dp, horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -749,6 +750,7 @@ fun HomeScreen(
                     ) {
                         Text("Clear")
                     }
+
                 },
                 dismissButton = {
                     TextButton(onClick = { showClearConfirmDialog = false }) {

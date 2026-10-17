@@ -1,9 +1,7 @@
 package lk.ac.nibm.hdse.fixly_20.model
 
 import com.google.firebase.firestore.Exclude
-import com.google.firebase.firestore.GeoPoint
 import com.google.firebase.firestore.PropertyName
-import java.util.Date
 
 enum class AccountType { CUSTOMER, PROVIDER }
 
@@ -24,11 +22,16 @@ data class User(
 
     val ratingSum: Double = 0.0,   // total of all star ratings received as a provider
     val ratingCount: Int = 0,      // how many reviews that total came from
+    val rating: Double = 0.0,
 
-    // --- Emergency search (providers opt in) ---
-    val emergencyAvailable: Boolean = false, // provider switched "Available for emergencies" ON
-    val lastLocation: GeoPoint? = null,      // where the provider was when they last shared
-    val lastLocationAt: Date? = null         // when that location was shared
+    val serviceAddress: String = "",
+    val serviceCity: String = "",
+    val serviceLatitude: Double? = null,
+    val serviceLongitude: Double? = null,
+    val serviceRadiusKm: Int = 20,
+    val availableForEmergency: Boolean = false,
+    val verificationStatus: String = "PENDING",
+    val suspended: Boolean = false
 ) {
     // Computed on the fly, never stored in Firestore
     @get:Exclude

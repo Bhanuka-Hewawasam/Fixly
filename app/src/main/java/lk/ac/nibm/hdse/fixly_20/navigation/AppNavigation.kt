@@ -29,6 +29,7 @@ import lk.ac.nibm.hdse.fixly_20.ui.screens.JobBidsScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.LoginScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.MyBookingsScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.PostJobScreen
+import lk.ac.nibm.hdse.fixly_20.ui.screens.ProfileScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.ProviderTrackingScreen
 import lk.ac.nibm.hdse.fixly_20.ui.screens.RegisterScreen
 
@@ -44,6 +45,8 @@ object Routes {
     const val ACCEPTED_JOBS = "accepted_jobs"
     const val EMERGENCY = "emergency"
     const val EMERGENCY_SOS = "emergency_sos"
+    const val PROFILE = "profile/{activeRole}"
+    fun profile(activeRole: String) = "profile/$activeRole"
     const val JOB_BIDS = "job_bids/{jobId}"
     fun jobBids(jobId: String) = "job_bids/$jobId"
     const val PROVIDER_TRACKING = "provider_tracking/{jobId}"
@@ -112,7 +115,26 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                 onViewBookings = { navController.navigate(Routes.MY_BOOKINGS) },
                 onViewAvailableJobs = { navController.navigate(Routes.AVAILABLE_JOBS) },
                 onViewAcceptedJobs = { navController.navigate(Routes.ACCEPTED_JOBS) },
-                onEmergency = { navController.navigate(Routes.EMERGENCY_SOS) }
+                onEmergency = { navController.navigate(Routes.EMERGENCY_SOS) },
+                onProfile = { activeRole -> navController.navigate(Routes.profile(activeRole)) }
+            )
+        }
+
+        composable(
+            route = Routes.PROFILE,
+            arguments = listOf(navArgument("activeRole") { type = NavType.StringType })
+        ) { entry ->
+            val activeRole = entry.arguments?.getString("activeRole") ?: "customer"
+            ProfileScreen(
+                activeRole = activeRole,
+                onBack = { navController.popBackStack() },
+                onNavigate = { route ->
+                    if (route != "profile") {
+                        navController.navigate(route) {
+                            launchSingleTop = true
+                        }
+                    }
+                }
             )
         }
 

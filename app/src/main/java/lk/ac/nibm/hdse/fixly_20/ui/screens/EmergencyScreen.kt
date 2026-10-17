@@ -45,6 +45,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import lk.ac.nibm.hdse.fixly_20.data.repository.EmergencyAlertRepository
 import lk.ac.nibm.hdse.fixly_20.model.EmergencyAlert
+import lk.ac.nibm.hdse.fixly_20.model.EmergencyAlertPolicy
 import lk.ac.nibm.hdse.fixly_20.model.User
 import lk.ac.nibm.hdse.fixly_20.ui.components.formatRating
 import lk.ac.nibm.hdse.fixly_20.util.EmergencyProviderMatcher
@@ -102,9 +103,17 @@ fun EmergencyScreen(
 
     // Automatically bind to existing active alert if customer returns to Emergency
     LaunchedEffect(myActiveAlertFlow) {
-        if (myActiveAlertFlow != null && activeRequestId == null) {
-            activeRequestId = myActiveAlertFlow!!.alertId
+        val latestAlert = myActiveAlertFlow
+        if (latestAlert != null && EmergencyAlertPolicy.isLiveForCustomer(latestAlert.status) &&
+            activeRequestId == null
+        ) {
+            activeRequestId = latestAlert.alertId
             isMinimized = false
+        } else if (latestAlert != null && !EmergencyAlertPolicy.isLiveForCustomer(latestAlert.status) &&
+            activeRequestId == latestAlert.alertId
+        ) {
+            activeRequestId = null
+            activeAlert = null
         }
     }
 
@@ -112,6 +121,9 @@ fun EmergencyScreen(
         if (activeRequestId != null) {
             alertRepository.observeAlert(activeRequestId!!).collect { alert ->
                 activeAlert = alert
+                if (alert != null && !EmergencyAlertPolicy.isLiveForCustomer(alert.status)) {
+                    activeRequestId = null
+                }
             }
         } else {
             activeAlert = null
@@ -137,7 +149,6 @@ fun EmergencyScreen(
         if (customerLocation == null) {
             emptyList()
         } else {
-            val now = Date()
             val sampleProviders = listOf(
                 User(
                     uid = "demo-preview-mechanic",
@@ -148,9 +159,12 @@ fun EmergencyScreen(
                     ratingSum = 46.0,
                     ratingCount = 10,
                     isVerified = true,
-                    emergencyAvailable = true,
-                    lastLocation = GeoPoint(customerLocation.latitude + 0.003, customerLocation.longitude + 0.002),
-                    lastLocationAt = now
+                    availableForEmergency = true,
+                    serviceAddress = "Sample service point",
+                    serviceCity = "Nearby",
+                    serviceLatitude = customerLocation.latitude + 0.003,
+                    serviceLongitude = customerLocation.longitude + 0.002,
+                    serviceRadiusKm = 20
                 ),
                 User(
                     uid = "demo-preview-electrician",
@@ -160,9 +174,12 @@ fun EmergencyScreen(
                     serviceCategories = listOf("Electrician"),
                     ratingSum = 43.0,
                     ratingCount = 9,
-                    emergencyAvailable = true,
-                    lastLocation = GeoPoint(customerLocation.latitude - 0.006, customerLocation.longitude + 0.004),
-                    lastLocationAt = now
+                    availableForEmergency = true,
+                    serviceAddress = "Sample service point",
+                    serviceCity = "Nearby",
+                    serviceLatitude = customerLocation.latitude - 0.006,
+                    serviceLongitude = customerLocation.longitude + 0.004,
+                    serviceRadiusKm = 20
                 ),
                 User(
                     uid = "demo-preview-plumber",
@@ -173,9 +190,12 @@ fun EmergencyScreen(
                     ratingSum = 48.0,
                     ratingCount = 12,
                     isVerified = true,
-                    emergencyAvailable = true,
-                    lastLocation = GeoPoint(customerLocation.latitude + 0.014, customerLocation.longitude - 0.008),
-                    lastLocationAt = now
+                    availableForEmergency = true,
+                    serviceAddress = "Sample service point",
+                    serviceCity = "Nearby",
+                    serviceLatitude = customerLocation.latitude + 0.014,
+                    serviceLongitude = customerLocation.longitude - 0.008,
+                    serviceRadiusKm = 20
                 )
             )
             EmergencyProviderMatcher.findMatches(
@@ -185,7 +205,7 @@ fun EmergencyScreen(
                 radiusKm = uiState.radiusKm,
                 currentUid = null,
                 currentEmail = null
-            ).map { ProviderWithDistance(it.provider, it.distanceKm, it.minutesAgo, isDemo = true) }
+            ).map { ProviderWithDistance(it.provider, it.distanceKm, isDemo = true) }
         }
     }
     val displayedProviders = if (isDebugBuild && showDemoProviders) {
@@ -284,7 +304,7 @@ fun EmergencyScreen(
                 }
             }
 
-            // --- Step B: filters + map + live results ---
+            // --- Step B: filters + map + registered service locations ---
             else -> {
                 Column(modifier = Modifier.fillMaxSize().padding(padding)) {
 
@@ -392,12 +412,13 @@ fun EmergencyScreen(
 
                                 // Provider markers
                                 displayedProviders.forEach { item ->
-                                    val pLoc = item.provider.lastLocation
-                                    if (pLoc != null) {
-                                        val pLatLng = LatLng(pLoc.latitude, pLoc.longitude)
+                                    val latitude = item.provider.serviceLatitude
+                                    val longitude = item.provider.serviceLongitude
+                                    if (latitude != null && longitude != null) {
+                                        val pLatLng = LatLng(latitude, longitude)
                                         Marker(
                                             state = MarkerState(position = pLatLng),
-                                            title = item.provider.name,
+                                            title = "Service Location: ${item.provider.name}",
                                             snippet = "${String.format(Locale.getDefault(), "%.1f", item.distanceKm)} km away",
                                             onClick = {
                                                 selectedProvider = item
@@ -441,7 +462,7 @@ fun EmergencyScreen(
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text(
                                         "No matching providers found within ${uiState.radiusKm} km. " +
-                                            "Try another service or a wider search radius. Providers need Emergency Availability on and a recent location.",
+                                            "Try another service or a wider search radius. Providers must have Emergency Availability enabled and a registered service location within their service radius.",
                                         textAlign = TextAlign.Center
                                     )
                                     Spacer(modifier = Modifier.height(12.dp))
@@ -462,8 +483,10 @@ fun EmergencyScreen(
                                         isSelected = selectedProvider?.provider?.uid == item.provider.uid,
                                         onClick = {
                                             selectedProvider = item
-                                            item.provider.lastLocation?.let { loc ->
-                                                val latLng = LatLng(loc.latitude, loc.longitude)
+                                            val latitude = item.provider.serviceLatitude
+                                            val longitude = item.provider.serviceLongitude
+                                            if (latitude != null && longitude != null) {
+                                                val latLng = LatLng(latitude, longitude)
                                                 cameraPositionState.position = CameraPosition.fromLatLngZoom(latLng, 15f)
                                             }
                                         },
@@ -520,13 +543,9 @@ fun EmergencyScreen(
                             providerId = item.provider.uid,
                             distanceKm = item.distanceKm,
                             note = requestNote,
-                            category = when (uiState.selectedCategory) {
-                                "Any Available Provider" -> "Any"
-                                "Electrician" -> "Electrical"
-                                "Plumber" -> "Plumbing"
-                                "AC Technician" -> "AC Repair"
-                                else -> uiState.selectedCategory
-                            }
+                            category = if (uiState.selectedCategory == "Any Available Provider") {
+                                "Any"
+                            } else uiState.selectedCategory
                         ) { result ->
                             isSendingRequest = false
                             result.onSuccess { alertId ->
@@ -970,12 +989,6 @@ private fun ProviderCard(
 ) {
     val provider = item.provider
     val distanceText = String.format(Locale.getDefault(), "%.1f", item.distanceKm)
-    val updatedText = when {
-        item.minutesAgo < 1 -> "just now"
-        item.minutesAgo < 60 -> "${item.minutesAgo} min ago"
-        else -> "${item.minutesAgo / 60} h ago"
-    }
-
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -1020,6 +1033,18 @@ private fun ProviderCard(
                 }
                 if (provider.isVerified) {
                     AssistChip(onClick = {}, label = { Text("Verified") })
+                } else {
+                    AssistChip(
+                        onClick = {},
+                        label = {
+                            Text(
+                                provider.verificationStatus
+                                    .replace('_', ' ')
+                                    .lowercase(Locale.getDefault())
+                                    .replaceFirstChar { it.titlecase(Locale.getDefault()) }
+                            )
+                        }
+                    )
                 }
             }
 
@@ -1029,8 +1054,24 @@ private fun ProviderCard(
                 style = MaterialTheme.typography.bodyMedium
             )
             Text(
-                "$distanceText km away • location updated $updatedText",
+                "Service Location",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                listOf(provider.serviceAddress, provider.serviceCity)
+                    .filter { it.isNotBlank() }
+                    .joinToString(", "),
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                "$distanceText km away • serves within ${provider.serviceRadiusKm} km",
                 style = MaterialTheme.typography.bodySmall
+            )
+            Text(
+                "This is the provider’s registered service area, not their live current location.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             if (isSelected) {
                 Text(

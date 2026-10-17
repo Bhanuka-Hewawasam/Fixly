@@ -16,6 +16,102 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(uid)).data.roles.hasAny(['provider']);
     }
 
+    function validServiceProfile(data) {
+      return data.serviceAddress is string
+        && data.serviceAddress.size() <= 250
+        && data.serviceCity is string
+        && data.serviceCity.size() <= 120
+        && data.serviceLatitude is number
+        && data.serviceLatitude >= -90
+        && data.serviceLatitude <= 90
+        && data.serviceLongitude is number
+        && data.serviceLongitude >= -180
+        && data.serviceLongitude <= 180
+        && data.serviceRadiusKm is int
+        && data.serviceRadiusKm >= 1
+        && data.serviceRadiusKm <= 100
+        && data.serviceCategories is list
+        && data.serviceCategories.size() > 0
+        && data.availableForEmergency is bool;
+    }
+
+    function projectionMatchesUser(providerId) {
+      let user = getAfter(/databases/$(database)/documents/users/$(providerId)).data;
+      return user.uid == providerId
+        && user.roles.hasAny(['provider'])
+        && validServiceProfile(user)
+        && request.resource.data.providerId == providerId
+        && request.resource.data.displayName == user.name
+        && request.resource.data.profilePhotoUrl == user.profilePictureUrl
+        && request.resource.data.serviceAddress == user.serviceAddress
+        && request.resource.data.serviceCity == user.serviceCity
+        && request.resource.data.serviceLatitude == user.serviceLatitude
+        && request.resource.data.serviceLongitude == user.serviceLongitude
+        && request.resource.data.serviceRadiusKm == user.serviceRadiusKm
+        && request.resource.data.serviceCategories == user.serviceCategories
+        && request.resource.data.availableForEmergency == user.availableForEmergency
+        && request.resource.data.ratingCount == user.ratingCount
+        && request.resource.data.rating == (
+          user.keys().hasAny(['rating'])
+            ? user.rating
+            : (user.ratingCount > 0 ? user.ratingSum / user.ratingCount : 0)
+        )
+        && request.resource.data.isVerified == user.isVerified
+        && request.resource.data.verificationStatus == (
+          user.keys().hasAny(['verificationStatus'])
+            ? user.verificationStatus
+            : (user.isVerified == true ? 'VERIFIED' : 'PENDING')
+        )
+        && request.resource.data.suspended == (
+          user.keys().hasAny(['suspended']) ? user.suspended : false
+        )
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function providerWithinServiceArea(providerId, alertLocation) {
+      let area = get(/databases/$(database)/documents/emergencyServiceAreas/$(providerId)).data;
+      let latitudeDistanceKm = (alertLocation.latitude - area.serviceLatitude) * 111.5;
+      let longitudeDistanceKm = (alertLocation.longitude - area.serviceLongitude) * 111.5;
+      return area.availableForEmergency == true
+        && area.suspended == false
+        && validServiceProfile(area)
+        && latitudeDistanceKm * latitudeDistanceKm
+          + longitudeDistanceKm * longitudeDistanceKm
+          <= area.serviceRadiusKm * area.serviceRadiusKm;
+    }
+
+    function serviceCategoryMatches(providerId, category) {
+      let categories = get(/databases/$(database)/documents/emergencyServiceAreas/$(providerId)).data.serviceCategories;
+      return category in ['Any', 'Any Available Provider']
+        || (category in ['Vehicle Mechanic', 'Mechanic']
+          && categories.hasAny(['Vehicle Mechanic', 'Mechanic']))
+        || (category in ['Electrician', 'Electrical']
+          && categories.hasAny(['Electrician', 'Electrical']))
+        || (category in ['Plumber', 'Plumbing']
+          && categories.hasAny(['Plumber', 'Plumbing']))
+        || (category in ['AC Technician', 'AC Repair']
+          && categories.hasAny(['AC Technician', 'AC Repair']))
+        || (category in ['Computer Technician', 'Computer Repair']
+          && categories.hasAny(['Computer Technician', 'Computer Repair']))
+        || (category == 'Other' && categories.hasAny(['Other']));
+    }
+
+    function validProviderProjectionRatingUpdate(providerId) {
+      let userPath = /databases/$(database)/documents/users/$(providerId);
+      let user = getAfter(userPath).data;
+      let jobPath = /databases/$(database)/documents/jobPosts/$(user.lastRatingJobId);
+      return signedIn()
+        && user.lastRatingJobId is string
+        && get(jobPath).data.customerId == request.auth.uid
+        && get(jobPath).data.assignedProviderId == providerId
+        && get(jobPath).data.customerConfirmed == false
+        && getAfter(jobPath).data.customerConfirmed == true
+        && getAfter(jobPath).data.status == 'Completed'
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['rating', 'ratingCount', 'updatedAt'])
+        && projectionMatchesUser(providerId);
+    }
+
     function providerCanReadAlert(alertId, uid) {
       let alert = get(/databases/$(database)/documents/emergencyAlerts/$(alertId)).data;
       let notification = get(/databases/$(database)/documents/providerNotifications/$(alertId + "_" + uid)).data;
@@ -54,55 +150,79 @@ service cloud.firestore {
           && getAfter(jobPath).data.diff(get(jobPath).data).affectedKeys()
             .hasOnly(['customerConfirmed', 'rating', 'reviewComment'])
           && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['ratingSum', 'ratingCount', 'lastRatingJobId'])
+            .hasOnly(['ratingSum', 'ratingCount', 'rating', 'lastRatingJobId'])
           && request.resource.data.ratingSum == resource.data.ratingSum + getAfter(jobPath).data.rating
-          && request.resource.data.ratingCount == resource.data.ratingCount + 1;
+          && request.resource.data.ratingCount == resource.data.ratingCount + 1
+          && request.resource.data.rating == request.resource.data.ratingSum
+            / request.resource.data.ratingCount;
       }
 
       allow create: if isOwner(uid)
-        && request.resource.data.uid == uid;
+        && request.resource.data.uid == uid
+        && request.resource.data.isVerified == false
+        && request.resource.data.ratingSum == 0
+        && request.resource.data.ratingCount == 0
+        && request.resource.data.rating == 0
+        && request.resource.data.verificationStatus == 'PENDING'
+        && request.resource.data.suspended == false
+        && !request.resource.data.keys().hasAny([
+          'emergencyServiceLocation', 'emergencyServiceLocationUpdatedAt'
+        ])
+        && (!request.resource.data.keys().hasAny(['emergencyAvailable'])
+          || request.resource.data.emergencyAvailable == false)
+        && (!request.resource.data.keys().hasAny(['lastLocation'])
+          || request.resource.data.lastLocation == null)
+        && (!request.resource.data.keys().hasAny(['lastLocationAt'])
+          || request.resource.data.lastLocationAt == null)
+        && !request.resource.data.keys().hasAny([
+          'emergencySessionExpiresAt', 'emergencySessionId'
+        ])
+        && (
+          (request.resource.data.availableForEmergency == false
+            && request.resource.data.serviceLatitude == null
+            && request.resource.data.serviceLongitude == null)
+          || (isProvider(uid) && validServiceProfile(request.resource.data))
+        );
       allow read: if isOwner(uid);
       allow update: if (
           isOwner(uid)
           && request.resource.data.uid == resource.data.uid
           && request.resource.data.roles == resource.data.roles
           && !request.resource.data.diff(resource.data).affectedKeys()
-            .hasAny(['ratingSum', 'ratingCount', 'lastRatingJobId', 'isVerified'])
+            .hasAny(['emergencyServiceLocation', 'emergencyServiceLocationUpdatedAt'])
+          && !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['ratingSum', 'ratingCount', 'rating', 'lastRatingJobId', 'isVerified'])
+          && !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny([
+              'emergencyAvailable', 'lastLocation', 'lastLocationAt',
+              'emergencySessionExpiresAt', 'emergencySessionId',
+              'isVerified', 'verificationStatus', 'suspended'
+            ])
           && (
-            !request.resource.data.diff(resource.data).affectedKeys()
-              .hasAny(['emergencyAvailable', 'lastLocation', 'lastLocationAt'])
-            || (
-              isProvider(uid)
-              && (
-                (request.resource.data.emergencyAvailable == true
-                  && request.resource.data.lastLocation is latlng
-                  && request.resource.data.lastLocationAt == request.time)
-                || (request.resource.data.emergencyAvailable == false
-                  && !request.resource.data.keys().hasAny(['lastLocation', 'lastLocationAt']))
-              )
-            )
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+              'serviceAddress', 'serviceCity', 'serviceLatitude', 'serviceLongitude',
+              'serviceRadiusKm', 'serviceCategories', 'availableForEmergency'
+            ])
+            || (isProvider(uid) && validServiceProfile(request.resource.data))
           )
         ) || validProviderRatingUpdate();
       allow delete: if false;
     }
 
-    match /emergencyProviderProfiles/{providerId} {
+    match /emergencyServiceAreas/{providerId} {
       allow read: if signedIn()
-        && resource.data.keys().hasOnly([
-          'providerId', 'displayName', 'profilePhotoUrl', 'serviceCategories',
-          'rating', 'ratingCount', 'isVerified', 'emergencyAvailable',
-          'latitude', 'longitude', 'lastLocationAt'
-        ])
-        && resource.data.providerId == providerId
-        && resource.data.emergencyAvailable == true
-        && resource.data.latitude is number
-        && resource.data.latitude >= -90
-        && resource.data.latitude <= 90
-        && resource.data.longitude is number
-        && resource.data.longitude >= -180
-        && resource.data.longitude <= 180
-        && resource.data.lastLocationAt is timestamp;
-      allow create, update, delete: if false;
+        && resource.data.availableForEmergency == true
+        && resource.data.suspended == false;
+      allow create, update: if (isOwner(providerId) ||
+          validProviderProjectionRatingUpdate(providerId))
+        && projectionMatchesUser(providerId)
+        && request.resource.data.keys().hasOnly([
+          'providerId', 'displayName', 'profilePhotoUrl', 'serviceAddress', 'serviceCity',
+          'serviceLatitude', 'serviceLongitude', 'serviceRadiusKm', 'serviceCategories',
+          'availableForEmergency', 'rating', 'ratingCount', 'isVerified',
+          'verificationStatus', 'suspended', 'updatedAt'
+        ]);
+      allow delete: if false;
     }
 
     match /emergencyProviderContacts/{providerId} {
@@ -125,7 +245,12 @@ service cloud.firestore {
         )
         && resource.data.keys().hasOnly(['providerId', 'phoneNumber'])
         && resource.data.providerId == providerId;
-      allow create, update, delete: if false;
+      allow create, update: if isOwner(providerId)
+        && request.resource.data.keys().hasOnly(['providerId', 'phoneNumber'])
+        && request.resource.data.providerId == providerId
+        && request.resource.data.phoneNumber
+          == getAfter(/databases/$(database)/documents/users/$(providerId)).data.phoneNumber;
+      allow delete: if false;
     }
 
     match /emergencyCustomerState/{uid} {
@@ -159,7 +284,19 @@ service cloud.firestore {
         && request.resource.data.acceptedProviderName == null
         && request.resource.data.acceptedProviderPhone == null
         && request.resource.data.acceptedAt == null
-        && getAfter(/databases/$(database)/documents/emergencyCustomerState/$(request.auth.uid)).data.activeAlertId == alertId;
+        && getAfter(/databases/$(database)/documents/emergencyCustomerState/$(request.auth.uid)).data.activeAlertId == alertId
+        && (
+          request.resource.data.selectedProviderId == null
+          || (
+            request.resource.data.selectedProviderId is string
+            && request.resource.data.selectedProviderId != request.auth.uid
+            && exists(/databases/$(database)/documents/emergencyServiceAreas/$(request.resource.data.selectedProviderId))
+            && providerWithinServiceArea(
+              request.resource.data.selectedProviderId,
+              request.resource.data.location
+            )
+          )
+        );
       allow read: if signedIn()
         && (resource.data.customerId == request.auth.uid
           || providerCanReadAlert(alertId, request.auth.uid));
@@ -184,10 +321,8 @@ service cloud.firestore {
               || resource.data.selectedProviderId == request.auth.uid)
             && activeProviderNotification(alertId, request.auth.uid)
             && isProvider(request.auth.uid)
-            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.emergencyAvailable == true
-            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.lastLocationAt > request.time - duration.value(15, 'm')
-            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.lastLocationAt <= request.time
-            && get(/databases/$(database)/documents/providerNotifications/$(alertId + "_" + request.auth.uid)).data.distanceKm <= 50
+            && exists(/databases/$(database)/documents/emergencyServiceAreas/$(request.auth.uid))
+            && providerWithinServiceArea(request.auth.uid, resource.data.location)
             && request.resource.data.acceptedAt == request.time
             && request.resource.data.acceptedProviderName == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.name
             && request.resource.data.acceptedProviderPhone == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.phoneNumber
@@ -211,20 +346,67 @@ service cloud.firestore {
 
     match /providerNotifications/{notificationId} {
       allow read: if signedIn() && resource.data.providerId == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'notificationId', 'providerId', 'alertId', 'type', 'title', 'body',
+          'serviceType', 'distanceKm', 'isRead', 'isCleared', 'status', 'createdAt',
+          'expiresAt'
+        ])
+        && request.resource.data.notificationId == notificationId
+        && request.resource.data.providerId is string
+        && request.resource.data.alertId is string
+        && notificationId == request.resource.data.alertId + '_' + request.resource.data.providerId
+        && request.resource.data.type == 'EMERGENCY_ALERT'
+        && request.resource.data.isRead == false
+        && request.resource.data.isCleared == false
+        && request.resource.data.status == 'ACTIVE'
+        && request.resource.data.createdAt == request.time
+        && getAfter(/databases/$(database)/documents/emergencyAlerts/$(request.resource.data.alertId)).data.customerId == request.auth.uid
+        && getAfter(/databases/$(database)/documents/emergencyAlerts/$(request.resource.data.alertId)).data.status == 'ACTIVE'
+        && getAfter(/databases/$(database)/documents/emergencyAlerts/$(request.resource.data.alertId)).data.expiresAt > request.time
+        && request.resource.data.expiresAt
+          == getAfter(/databases/$(database)/documents/emergencyAlerts/$(request.resource.data.alertId)).data.expiresAt
+        && exists(/databases/$(database)/documents/emergencyServiceAreas/$(request.resource.data.providerId))
+        && (
+          getAfter(/databases/$(database)/documents/emergencyAlerts/$(request.resource.data.alertId)).data.selectedProviderId
+            == request.resource.data.providerId
+          || getAfter(/databases/$(database)/documents/emergencyAlerts/$(request.resource.data.alertId)).data.selectedProviderId == null
+        )
+        && serviceCategoryMatches(
+          request.resource.data.providerId,
+          getAfter(/databases/$(database)/documents/emergencyAlerts/$(request.resource.data.alertId)).data.category
+        )
+        && providerWithinServiceArea(
+          request.resource.data.providerId,
+          getAfter(/databases/$(database)/documents/emergencyAlerts/$(request.resource.data.alertId)).data.location
+        );
       allow update: if signedIn()
-        && resource.data.providerId == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['isRead', 'isCleared', 'clearedAt', 'status'])
         && (
-          (request.resource.data.status == resource.data.status
-            && request.resource.data.isRead is bool)
-          || (resource.data.status == 'ACTIVE'
-            && request.resource.data.status == 'DECLINED'
-            && request.resource.data.isRead == true
-            && get(/databases/$(database)/documents/emergencyAlerts/$(resource.data.alertId)).data.status == 'ACTIVE'
-            && get(/databases/$(database)/documents/emergencyAlerts/$(resource.data.alertId)).data.expiresAt > request.time)
+          (resource.data.providerId == request.auth.uid
+            && (
+              (request.resource.data.status == resource.data.status
+                && request.resource.data.isRead is bool)
+              || (resource.data.status == 'ACTIVE'
+                && request.resource.data.status == 'DECLINED'
+                && request.resource.data.isRead == true
+                && get(/databases/$(database)/documents/emergencyAlerts/$(resource.data.alertId)).data.status == 'ACTIVE'
+                && get(/databases/$(database)/documents/emergencyAlerts/$(resource.data.alertId)).data.expiresAt > request.time)
+              || (resource.data.status == 'ACTIVE'
+                && request.resource.data.status == 'ACCEPTED'
+                && request.resource.data.isRead == true
+                && getAfter(/databases/$(database)/documents/emergencyAlerts/$(resource.data.alertId)).data.status == 'ACCEPTED'
+                && getAfter(/databases/$(database)/documents/emergencyAlerts/$(resource.data.alertId)).data.acceptedProviderId == request.auth.uid)
+            ))
+          || (resource.data.status in ['ACTIVE', 'ACCEPTED']
+            && request.resource.data.status in ['CANCELLED', 'CLOSED']
+            && !(resource.data.status == 'ACCEPTED'
+              && request.resource.data.status == 'CANCELLED')
+            && get(/databases/$(database)/documents/emergencyAlerts/$(resource.data.alertId)).data.customerId == request.auth.uid
+            && getAfter(/databases/$(database)/documents/emergencyAlerts/$(resource.data.alertId)).data.status == request.resource.data.status)
         );
-      allow create, delete: if false;
+      allow delete: if false;
     }
 
     match /jobPosts/{jobId} {

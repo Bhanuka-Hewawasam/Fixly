@@ -1,68 +1,114 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
-    MAX_PROVIDER_LOCATION_AGE_MS,
     matchesEmergencyRequest,
     notificationStatusUpdate,
-    shouldExpireAlert,
-    emergencyProviderProfile
+    shouldExpireAlert
 } = require("./emergency-utils");
 
-const nowMs = 1_800_000_000_000;
+const customerId = "customer";
 const customerLocation = { latitude: 6.9271, longitude: 79.8612 };
 
 function provider(overrides = {}) {
     return {
         roles: ["provider"],
-        emergencyAvailable: true,
+        availableForEmergency: true,
+        suspended: false,
         serviceCategories: ["Electrical"],
-        lastLocation: { latitude: 6.93, longitude: 79.86 },
-        lastLocationAt: { toMillis: () => nowMs - 1_000 },
+        serviceLatitude: 6.93,
+        serviceLongitude: 79.86,
+        serviceRadiusKm: 20,
         ...overrides
     };
 }
 
-test("provider matching rejects self, missing location, stale location, and unsupported category", () => {
+test("registered service area matching excludes self, unavailable, suspended, and wrong category", () => {
     const request = {
-        customerId: "customer",
+        customerId,
         customerLocation,
-        category: "Electrician",
-        nowMs
+        category: "Electrician"
     };
-    assert.equal(matchesEmergencyRequest({ ...request, providerId: "customer", provider: provider() }), false);
+    assert.equal(matchesEmergencyRequest({
+        ...request,
+        providerId: customerId,
+        provider: provider()
+    }), false);
     assert.equal(matchesEmergencyRequest({
         ...request,
         providerId: "provider",
-        provider: provider({ lastLocationAt: { toMillis: () => nowMs - MAX_PROVIDER_LOCATION_AGE_MS - 1 } })
+        provider: provider({ availableForEmergency: false })
+    }), false);
+    assert.equal(matchesEmergencyRequest({
+        ...request,
+        providerId: "provider",
+        provider: provider({ suspended: true })
     }), false);
     assert.equal(matchesEmergencyRequest({
         ...request,
         providerId: "provider",
         provider: provider({ serviceCategories: ["Plumbing"] })
     }), false);
-    assert.equal(matchesEmergencyRequest({
-        ...request,
-        providerId: "provider",
-        provider: provider({ lastLocation: null })
-    }), false);
 });
 
-test("new emergency categories match existing service category names within configured radius", () => {
+test("service location and provider radius determine eligibility without freshness timestamps", () => {
     assert.equal(matchesEmergencyRequest({
         providerId: "provider",
         provider: provider(),
-        customerId: "customer",
+        customerId,
         customerLocation,
-        category: "Electrician",
-        nowMs
+        category: "Electrician"
     }), true);
     assert.equal(matchesEmergencyRequest({
         providerId: "provider",
-        provider: provider({ lastLocation: { latitude: 7.7, longitude: 80.0 } }),
-        customerId: "customer",
+        provider: provider({ serviceLatitude: 7.7, serviceLongitude: 80.0 }),
+        customerId,
         customerLocation,
-        category: "Any",
-        nowMs
+        category: "Any"
+    }), false);
+    assert.equal(matchesEmergencyRequest({
+        providerId: "provider",
+        provider: provider({ serviceRadiusKm: 0 }),
+        customerId,
+        customerLocation,
+        category: "Any"
+    }), false);
+});
+
+test("direct requests only notify their selected provider", () => {
+    assert.equal(matchesEmergencyRequest({
+        providerId: "selected",
+        provider: provider(),
+        customerId,
+        customerLocation,
+        category: "Electrician",
+        selectedProviderId: "selected"
+    }), true);
+    assert.equal(matchesEmergencyRequest({
+        providerId: "another",
+        provider: provider(),
+        customerId,
+        customerLocation,
+        category: "Electrician",
+        selectedProviderId: "selected"
+    }), false);
+});
+
+test("enabled registered service locations remain eligible without a login-session field", () => {
+    const savedArea = provider();
+    delete savedArea.normalAppSessionActive;
+    assert.equal(matchesEmergencyRequest({
+        providerId: "provider",
+        provider: savedArea,
+        customerId,
+        customerLocation,
+        category: "Electrician"
+    }), true);
+    assert.equal(matchesEmergencyRequest({
+        providerId: "provider",
+        provider: provider({ availableForEmergency: false }),
+        customerId,
+        customerLocation,
+        category: "Electrician"
     }), false);
 });
 
@@ -83,43 +129,9 @@ test("acceptance closes other provider notifications and terminal statuses propa
 });
 
 test("only live requests past their deadline expire", () => {
-    assert.equal(shouldExpireAlert("ACTIVE", nowMs - 1, nowMs), true);
-    assert.equal(shouldExpireAlert("ACCEPTED", nowMs - 1, nowMs), true);
-    assert.equal(shouldExpireAlert("ACTIVE", nowMs + 1, nowMs), false);
-    assert.equal(shouldExpireAlert("CLOSED", nowMs - 1, nowMs), false);
-});
-
-test("emergency search projection contains only allowlisted fields and omits private data", () => {
-    const profile = emergencyProviderProfile("provider", {
-        roles: ["provider"],
-        emergencyAvailable: true,
-        name: "Provider",
-        email: "private@example.com",
-        phoneNumber: "+10000000000",
-        fcmToken: "private-token",
-        passwordHash: "private-hash",
-        profilePictureUrl: "https://example.com/profile.jpg",
-        serviceCategories: ["Electrical"],
-        ratingSum: 18,
-        ratingCount: 4,
-        isVerified: true,
-        lastLocation: { latitude: 6.93, longitude: 79.86 },
-        lastLocationAt: { toMillis: () => nowMs - 1_000 }
-    }, nowMs);
-
-    assert.deepEqual(Object.keys(profile).sort(), [
-        "displayName", "emergencyAvailable", "isVerified",
-        "lastLocationAt", "latitude", "longitude", "profilePhotoUrl", "providerId", "rating", "ratingCount",
-        "serviceCategories"
-    ].sort());
-    assert.equal(profile.rating, 4.5);
-    assert.equal(profile.latitude, 6.93);
-    assert.equal(profile.longitude, 79.86);
-    assert.equal(profile.lastLocation, undefined);
-    assert.equal(profile.phoneNumber, undefined);
-    assert.equal(profile.fcmToken, undefined);
-    assert.equal(profile.passwordHash, undefined);
-    assert.equal(emergencyProviderProfile("provider", provider({
-        lastLocationAt: { toMillis: () => nowMs - MAX_PROVIDER_LOCATION_AGE_MS - 1 }
-    }), nowMs), null);
+    const now = 1_800_000_000_000;
+    assert.equal(shouldExpireAlert("ACTIVE", now - 1, now), true);
+    assert.equal(shouldExpireAlert("ACCEPTED", now - 1, now), true);
+    assert.equal(shouldExpireAlert("ACTIVE", now + 1, now), false);
+    assert.equal(shouldExpireAlert("CLOSED", now - 1, now), false);
 });

@@ -57,5 +57,6 @@ data class ProviderNotification(
     val status: String = "ACTIVE",          // ACTIVE, ACCEPTED, CLOSED, CANCELLED, DECLINED, EXPIRED
     val isCleared: Boolean = false,
     @ServerTimestamp val createdAt: Date? = null,
+    val expiresAt: Date? = null,
     @ServerTimestamp val clearedAt: Date? = null
 )

@@ -6,8 +6,11 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.GeoPoint
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import lk.ac.nibm.hdse.fixly_20.BuildConfig
 import lk.ac.nibm.hdse.fixly_20.model.EmergencyAlert
@@ -17,6 +20,7 @@ import lk.ac.nibm.hdse.fixly_20.model.ProviderNotification
 import lk.ac.nibm.hdse.fixly_20.util.DistanceUtils
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicReference
 
 class EmergencyAlertRepository(
     private val firebaseAuth: FirebaseAuth = FirebaseAuth.getInstance(),
@@ -24,6 +28,8 @@ class EmergencyAlertRepository(
 ) {
 
     private val alerts = firestore.collection("emergencyAlerts")
+
+    private data class EmergencyTarget(val providerId: String, val distanceKm: Double)
 
     /** Creates one live alert per customer, atomically, so repeated taps cannot create duplicates. */
     suspend fun sendAlert(
@@ -33,7 +39,20 @@ class EmergencyAlertRepository(
         note: String,
         location: GeoPoint
     ): Result<String> {
-        return createAlert(customerName, customerPhone, category, note, location, null)
+        val targets = try {
+            findBroadcastTargets(location, category)
+        } catch (error: Exception) {
+            return Result.failure(error)
+        }
+        return createAlert(
+            customerName,
+            customerPhone,
+            category,
+            note,
+            location,
+            selectedProviderId = null,
+            broadcastTargets = targets
+        )
     }
 
     /**
@@ -48,10 +67,18 @@ class EmergencyAlertRepository(
         selectedProviderId: String,
         distanceKm: Double
     ): Result<String> {
-        if (selectedProviderId.isBlank() || distanceKm < 0) {
+        if (selectedProviderId.isBlank() || !distanceKm.isFinite() || distanceKm < 0) {
             return Result.failure(IllegalArgumentException("Select a valid nearby provider"))
         }
-        return createAlert(customerName, customerPhone, category, note, location, selectedProviderId)
+        return createAlert(
+            customerName,
+            customerPhone,
+            category,
+            note,
+            location,
+            selectedProviderId,
+            emptyList()
+        )
     }
 
     private suspend fun createAlert(
@@ -60,16 +87,21 @@ class EmergencyAlertRepository(
         category: String,
         note: String,
         location: GeoPoint,
-        selectedProviderId: String?
+        selectedProviderId: String?,
+        broadcastTargets: List<EmergencyTarget>
     ): Result<String> = try {
         val customerId = firebaseAuth.currentUser?.uid
             ?: return Result.failure(IllegalStateException("Please sign in to send an emergency request"))
         val alertRef = alerts.document()
         val stateRef = firestore.collection("emergencyCustomerState").document(customerId)
         val expiresAt = Date(System.currentTimeMillis() + ALERT_LIFETIME_MS)
+        val selectedProviderRef = selectedProviderId?.let {
+            firestore.collection("emergencyServiceAreas").document(it)
+        }
 
         firestore.runTransaction { transaction ->
             val stateSnapshot = transaction.get(stateRef)
+            val serviceArea = selectedProviderRef?.let(transaction::get)
             val activeAlertId = stateSnapshot.getString("activeAlertId")
             if (!activeAlertId.isNullOrBlank()) {
                 val existingRef = alerts.document(activeAlertId)
@@ -83,6 +115,40 @@ class EmergencyAlertRepository(
                 if (EmergencyAlertPolicy.shouldExpire(status.orEmpty(), existingExpiry, now)) {
                     transaction.update(existingRef, "status", EmergencyAlertPolicy.EXPIRED)
                 }
+            }
+            val notificationTargets = broadcastTargets.toMutableList()
+            if (selectedProviderId != null && selectedProviderRef != null) {
+                val area = serviceArea
+                    ?: throw IllegalStateException("Provider service location is unavailable")
+                val latitude = area.getDouble("serviceLatitude")
+                    ?: throw IllegalStateException("Provider service location is unavailable")
+                val longitude = area.getDouble("serviceLongitude")
+                    ?: throw IllegalStateException("Provider service location is unavailable")
+                val serviceRadiusKm = area.getLong("serviceRadiusKm")?.toInt() ?: 0
+                val categories = area.get("serviceCategories") as? List<*>
+                    ?: emptyList<Any>()
+                val categoryAliases = categoryAliases(category)
+                val providerDistance = DistanceUtils.distanceKm(
+                    location.latitude,
+                    location.longitude,
+                    latitude,
+                    longitude
+                )
+                if (area.getBoolean("availableForEmergency") != true ||
+                    area.getBoolean("suspended") == true ||
+                    !latitude.isFinite() || latitude !in -90.0..90.0 ||
+                    !longitude.isFinite() || longitude !in -180.0..180.0 ||
+                    serviceRadiusKm <= 0 ||
+                    providerDistance > minOf(serviceRadiusKm.toDouble(), MAX_PROVIDER_DISTANCE_KM)
+                ) {
+                    throw IllegalStateException("This provider is no longer available within the service area.")
+                }
+                if (category !in listOf("Any", "Any Available Provider") &&
+                    categoryAliases.none { it in categories }
+                ) {
+                    throw IllegalStateException("This provider does not match the selected service category.")
+                }
+                notificationTargets += EmergencyTarget(selectedProviderId, providerDistance)
             }
 
             val alertData = hashMapOf<String, Any?>(
@@ -107,12 +173,80 @@ class EmergencyAlertRepository(
                 stateRef,
                 mapOf("activeAlertId" to alertRef.id, "updatedAt" to FieldValue.serverTimestamp())
             )
+            notificationTargets.forEach { target ->
+                val notificationId = "${alertRef.id}_${target.providerId}"
+                transaction.set(
+                    firestore.collection("providerNotifications")
+                        .document(notificationId),
+                    mapOf(
+                        "notificationId" to notificationId,
+                        "providerId" to target.providerId,
+                        "alertId" to alertRef.id,
+                        "type" to "EMERGENCY_ALERT",
+                        "title" to "Emergency ${String.format(Locale.US, "%.1f", target.distanceKm)} km away",
+                        "body" to if (note.isBlank()) "A customer needs urgent help near you ($category)." else "Note: $note",
+                        "serviceType" to category,
+                        "distanceKm" to target.distanceKm,
+                        "isRead" to false,
+                        "isCleared" to false,
+                        "status" to "ACTIVE",
+                        "createdAt" to FieldValue.serverTimestamp(),
+                        "expiresAt" to expiresAt
+                    )
+                )
+            }
             alertRef.id
         }.await()
         Result.success(alertRef.id)
     } catch (e: Exception) {
         if (BuildConfig.DEBUG) Log.e(TAG, "Failed to create emergency alert", e)
         Result.failure(e)
+    }
+
+    private suspend fun findBroadcastTargets(
+        customerLocation: GeoPoint,
+        category: String
+    ): List<EmergencyTarget> {
+        val customerId = firebaseAuth.currentUser?.uid
+            ?: throw IllegalStateException("Please sign in to send an emergency request")
+        val documents = firestore.collection("emergencyServiceAreas")
+            .whereEqualTo("availableForEmergency", true)
+            .whereEqualTo("suspended", false)
+            .get()
+            .await()
+            .documents
+        val matchingCategories = categoryAliases(category)
+        val targets = documents.mapNotNull { area ->
+            val providerId = area.getString("providerId") ?: return@mapNotNull null
+            if (providerId == customerId) return@mapNotNull null
+            val latitude = area.getDouble("serviceLatitude") ?: return@mapNotNull null
+            val longitude = area.getDouble("serviceLongitude") ?: return@mapNotNull null
+            val serviceRadiusKm = area.getLong("serviceRadiusKm")?.toInt() ?: return@mapNotNull null
+            val categories = area.get("serviceCategories") as? List<*> ?: return@mapNotNull null
+            if (categoryAliases(category).isNotEmpty() &&
+                matchingCategories.none { it in categories }
+            ) return@mapNotNull null
+            if (!latitude.isFinite() || latitude !in -90.0..90.0 ||
+                !longitude.isFinite() || longitude !in -180.0..180.0 ||
+                serviceRadiusKm <= 0
+            ) return@mapNotNull null
+            val distance = DistanceUtils.distanceKm(
+                customerLocation.latitude,
+                customerLocation.longitude,
+                latitude,
+                longitude
+            )
+            if (distance > minOf(serviceRadiusKm.toDouble(), MAX_PROVIDER_DISTANCE_KM)) {
+                return@mapNotNull null
+            }
+            EmergencyTarget(providerId, distance)
+        }
+        if (targets.size > MAX_ATOMIC_NOTIFICATION_TARGETS) {
+            throw IllegalStateException(
+                "Too many nearby providers match this emergency request. Select a specific provider or category."
+            )
+        }
+        return targets
     }
 
     /** The latest alert stays visible after terminal states so the customer can see its outcome. */
@@ -215,9 +349,11 @@ class EmergencyAlertRepository(
                 val notificationRef = firestore.collection("providerNotifications")
                     .document("${alertId}_$providerId")
                 val providerRef = firestore.collection("users").document(providerId)
+                val serviceAreaRef = firestore.collection("emergencyServiceAreas").document(providerId)
                 val snapshot = transaction.get(ref)
                 val notification = transaction.get(notificationRef)
                 val provider = transaction.get(providerRef)
+                val serviceArea = transaction.get(serviceAreaRef)
                 val status = snapshot.getString("status") ?: "ACTIVE"
                 val selectedProviderId = snapshot.getString("selectedProviderId")
                 val expiresAtMs = snapshot.getDate("expiresAt")?.time ?: 0L
@@ -240,43 +376,35 @@ class EmergencyAlertRepository(
                 ) {
                     throw IllegalStateException("This emergency request is no longer available to you")
                 }
-                val providerLocation = provider.getGeoPoint("lastLocation")
-                    ?: throw IllegalStateException("Your emergency location is unavailable")
-                val lastLocationAt = provider.getTimestamp("lastLocationAt")?.toDate()
-                    ?: provider.getDate("lastLocationAt")
-                    ?: throw IllegalStateException("Update your emergency availability location first")
-                val locationAgeMs = System.currentTimeMillis() - lastLocationAt.time
-                val providerCategories = provider.get("serviceCategories") as? List<*>
+                val providerLatitude = serviceArea.getDouble("serviceLatitude")
+                    ?: throw IllegalStateException("Your registered service location is unavailable")
+                val providerLongitude = serviceArea.getDouble("serviceLongitude")
+                    ?: throw IllegalStateException("Your registered service location is unavailable")
+                val serviceRadiusKm = serviceArea.getLong("serviceRadiusKm")?.toInt() ?: 0
+                val providerCategories = serviceArea.get("serviceCategories") as? List<*>
                     ?: emptyList<Any>()
                 val providerRoles = provider.get("roles") as? List<*> ?: emptyList<Any>()
                 val customerLocation = snapshot.getGeoPoint("location")
                     ?: throw IllegalStateException("The customer's emergency location is unavailable")
                 val category = snapshot.getString("category") ?: "Any"
-                val categoryAliases = when (category) {
-                    "Vehicle Mechanic" -> listOf("Vehicle Mechanic", "Mechanic")
-                    "Electrician" -> listOf("Electrician", "Electrical")
-                    "Plumber" -> listOf("Plumber", "Plumbing")
-                    "AC Technician" -> listOf("AC Technician", "AC Repair")
-                    "Computer Technician" -> listOf("Computer Technician", "Computer Repair")
-                    "Any Available Provider" -> listOf("Any")
-                    else -> listOf(category)
-                }
+                val categoryAliases = categoryAliases(category)
                 val distance = DistanceUtils.distanceKm(
                     customerLocation.latitude,
                     customerLocation.longitude,
-                    providerLocation.latitude,
-                    providerLocation.longitude
+                    providerLatitude,
+                    providerLongitude
                 )
                 if (!providerRoles.contains("provider") ||
-                    provider.getBoolean("emergencyAvailable") != true ||
-                    locationAgeMs !in 0..MAX_LOCATION_AGE_MS ||
-                    providerLocation.latitude !in -90.0..90.0 ||
-                    providerLocation.longitude !in -180.0..180.0 ||
-                    distance > MAX_PROVIDER_DISTANCE_KM
+                    serviceArea.getBoolean("availableForEmergency") != true ||
+                    serviceArea.getBoolean("suspended") == true ||
+                    !providerLatitude.isFinite() || providerLatitude !in -90.0..90.0 ||
+                    !providerLongitude.isFinite() || providerLongitude !in -180.0..180.0 ||
+                    serviceRadiusKm <= 0 ||
+                    distance > minOf(serviceRadiusKm.toDouble(), MAX_PROVIDER_DISTANCE_KM)
                 ) {
-                    throw IllegalStateException("Turn on emergency availability and refresh your location before accepting")
+                    throw IllegalStateException("Enable Emergency Availability and save a valid service location before accepting.")
                 }
-                if (category != "Any" &&
+                if (categoryAliases.isNotEmpty() &&
                     categoryAliases.none { it in providerCategories }
                 ) {
                     throw IllegalStateException("This request does not match your service categories")
@@ -295,6 +423,10 @@ class EmergencyAlertRepository(
                         "acceptedProviderPhone" to verifiedPhone,
                         "acceptedAt" to FieldValue.serverTimestamp()
                     )
+                )
+                transaction.update(
+                    notificationRef,
+                    mapOf("status" to "ACCEPTED", "isRead" to true)
                 )
             }.await()
 
@@ -353,6 +485,11 @@ class EmergencyAlertRepository(
             firestore.runTransaction { transaction ->
                 val ref = alerts.document(alertId)
                 val snapshot = transaction.get(ref)
+                val selectedProviderId = snapshot.getString("selectedProviderId")
+                val notificationRef = selectedProviderId?.let {
+                    firestore.collection("providerNotifications").document("${alertId}_$it")
+                }
+                val notification = notificationRef?.let(transaction::get)
                 if (snapshot.getString("customerId") != customerId) {
                     throw IllegalStateException("You can only cancel your own request")
                 }
@@ -365,6 +502,9 @@ class EmergencyAlertRepository(
                     throw IllegalStateException("Only an active request can be cancelled")
                 }
                 transaction.update(ref, "status", "CANCELLED")
+                if (notificationRef != null && notification?.exists() == true &&
+                    notification.getString("status") == "ACTIVE"
+                ) transaction.update(notificationRef, "status", "CANCELLED")
             }
             Result.success(Unit)
         } catch (e: Exception) {
@@ -379,12 +519,20 @@ class EmergencyAlertRepository(
             firestore.runTransaction { transaction ->
                 val ref = alerts.document(alertId)
                 val snapshot = transaction.get(ref)
+                val selectedProviderId = snapshot.getString("selectedProviderId")
+                val notificationRef = selectedProviderId?.let {
+                    firestore.collection("providerNotifications").document("${alertId}_$it")
+                }
+                val notification = notificationRef?.let(transaction::get)
                 if (snapshot.getString("customerId") != customerId ||
                     !EmergencyAlertPolicy.canCustomerClose(snapshot.getString("status").orEmpty())
                 ) {
                     throw IllegalStateException("Only your accepted request can be closed")
                 }
                 transaction.update(ref, "status", "CLOSED")
+                if (notificationRef != null && notification?.exists() == true) {
+                    transaction.update(notificationRef, "status", "CLOSED")
+                }
             }
             Result.success(Unit)
         } catch (e: Exception) {
@@ -398,6 +546,19 @@ class EmergencyAlertRepository(
         if (BuildConfig.DEBUG) {
             Log.d(TAG, "DEBUG: 6. Provider listener query - observing providerNotifications where providerId == $providerId (current provider UID)")
         }
+        val latestNotifications = AtomicReference(emptyList<ProviderNotification>())
+        fun sendVisibleNotifications() {
+            val now = System.currentTimeMillis()
+            val visible = latestNotifications.get().filter { notification ->
+                val status = notification.status.uppercase(Locale.getDefault())
+                val isTerminal = notification.isCleared ||
+                    status in listOf("CLOSED", "CANCELLED", "ACCEPTED", "DECLINED", "EXPIRED")
+                val expiration = notification.expiresAt?.time
+                    ?: notification.createdAt?.time?.plus(ALERT_LIFETIME_MS)
+                !isTerminal && (expiration == null || expiration > now)
+            }
+            trySend(visible)
+        }
         val listener = firestore.collection("providerNotifications")
             .whereEqualTo("providerId", providerId)
             .addSnapshotListener { snapshot, error ->
@@ -405,18 +566,24 @@ class EmergencyAlertRepository(
                     close(error)
                     return@addSnapshotListener
                 }
-                val list = snapshot?.toObjects(ProviderNotification::class.java)
-                    ?.filter { notif ->
-                        val status = notif.status.uppercase(Locale.getDefault())
-                        val isHidden = notif.isCleared || status == "CLOSED" || status == "CANCELLED" || status == "ACCEPTED" || status == "DECLINED" || status == "EXPIRED"
-                        !isHidden
-                    } ?: emptyList()
+                val receivedNotifications =
+                    snapshot?.toObjects(ProviderNotification::class.java) ?: emptyList()
+                latestNotifications.set(receivedNotifications)
                 if (BuildConfig.DEBUG) {
-                    Log.d(TAG, "DEBUG: 7. Number of notifications received: ${list.size} for providerId: $providerId")
+                    Log.d(TAG, "DEBUG: 7. Number of notifications received: ${receivedNotifications.size} for providerId: $providerId")
                 }
-                trySend(list)
+                sendVisibleNotifications()
             }
-        awaitClose { listener.remove() }
+        val expirationTicker = launch {
+            while (isActive) {
+                delay(15_000)
+                sendVisibleNotifications()
+            }
+        }
+        awaitClose {
+            expirationTicker.cancel()
+            listener.remove()
+        }
     }
 
     suspend fun markNotificationRead(notificationId: String): Result<Unit> {
@@ -468,7 +635,17 @@ class EmergencyAlertRepository(
     companion object {
         private const val TAG = "EmergencyAlertRepository"
         const val ALERT_LIFETIME_MS = 30L * 60 * 1000
-        const val MAX_LOCATION_AGE_MS = 15L * 60 * 1000
         const val MAX_PROVIDER_DISTANCE_KM = 50.0
+        private const val MAX_ATOMIC_NOTIFICATION_TARGETS = 498
+    }
+
+    private fun categoryAliases(category: String): List<String> = when (category) {
+        "Vehicle Mechanic" -> listOf("Vehicle Mechanic", "Mechanic")
+        "Electrician", "Electrical" -> listOf("Electrician", "Electrical")
+        "Plumber", "Plumbing" -> listOf("Plumber", "Plumbing")
+        "AC Technician", "AC Repair" -> listOf("AC Technician", "AC Repair")
+        "Computer Technician", "Computer Repair" -> listOf("Computer Technician", "Computer Repair")
+        "Any", "Any Available Provider" -> emptyList()
+        else -> listOf(category)
     }
 }

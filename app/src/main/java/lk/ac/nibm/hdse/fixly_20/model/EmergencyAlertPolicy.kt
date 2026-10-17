@@ -7,13 +7,15 @@ object EmergencyAlertPolicy {
     const val EXPIRED = "EXPIRED"
     const val CLOSED = "CLOSED"
 
+    fun isLiveForCustomer(status: String): Boolean = status == ACTIVE || status == ACCEPTED
+
     fun canCustomerCancel(status: String, expiresAtMs: Long, nowMs: Long): Boolean =
         status == ACTIVE && expiresAtMs > nowMs
 
     fun canCustomerClose(status: String): Boolean = status == ACCEPTED
 
     fun hasUnexpiredLiveAlert(status: String, expiresAtMs: Long, nowMs: Long): Boolean =
-        (status == ACTIVE || status == ACCEPTED) && expiresAtMs > nowMs
+        isLiveForCustomer(status) && expiresAtMs > nowMs
 
     fun canProviderAccept(
         alertStatus: String,

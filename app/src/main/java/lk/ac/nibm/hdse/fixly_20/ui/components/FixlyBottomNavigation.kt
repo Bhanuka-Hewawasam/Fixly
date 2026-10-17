@@ -8,6 +8,7 @@ import androidx.compose.material.icons.filled.Emergency
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Work
 import androidx.compose.material.icons.outlined.Handyman
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -23,6 +24,7 @@ sealed class BottomNavItem(val route: String, val title: String, val icon: Image
     object AvailableJobs : BottomNavItem("available_jobs", "Jobs", Icons.Default.Work)
     object MyWork : BottomNavItem("accepted_jobs", "My Work", Icons.Outlined.Handyman)
     object Emergency : BottomNavItem("emergency_sos", "Emergency", Icons.Default.Emergency)
+    object Profile : BottomNavItem("profile", "Profile", Icons.Outlined.Person)
 }
 
 @Composable
@@ -33,9 +35,9 @@ fun FixlyBottomNavBar(
     activeRole: String = "customer"
 ) {
     val items = if (activeRole == "customer") {
-        listOf(BottomNavItem.Home, BottomNavItem.History, BottomNavItem.Emergency)
+        listOf(BottomNavItem.Home, BottomNavItem.History, BottomNavItem.Emergency, BottomNavItem.Profile)
     } else {
-        listOf(BottomNavItem.Home, BottomNavItem.AvailableJobs, BottomNavItem.MyWork)
+        listOf(BottomNavItem.Home, BottomNavItem.AvailableJobs, BottomNavItem.MyWork, BottomNavItem.Profile)
     }
 
     Surface(

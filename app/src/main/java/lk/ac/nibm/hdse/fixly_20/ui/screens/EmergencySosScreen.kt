@@ -42,6 +42,7 @@ import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
 import lk.ac.nibm.hdse.fixly_20.model.EmergencyAlert
+import lk.ac.nibm.hdse.fixly_20.model.EmergencyAlertPolicy
 import lk.ac.nibm.hdse.fixly_20.model.EmergencyLocationPolicy
 import lk.ac.nibm.hdse.fixly_20.model.EmergencyResponse
 import lk.ac.nibm.hdse.fixly_20.ui.components.formatRating
@@ -72,7 +73,9 @@ fun EmergencySosScreen(
 
     val uiState by viewModel.uiState.collectAsState()
     var dismissedAlertId by remember { mutableStateOf<String?>(null) }
-    val myAlert = uiState.myAlert?.takeIf { it.alertId != dismissedAlertId }
+    val myAlert = uiState.myAlert?.takeIf {
+        it.alertId != dismissedAlertId && EmergencyAlertPolicy.isLiveForCustomer(it.status)
+    }
 
     var note by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("Any Available Provider") }
@@ -106,13 +109,9 @@ fun EmergencySosScreen(
                     val point = GeoPoint(location.latitude, location.longitude)
                     viewModel.setCustomerLocation(point)
                     if (sendAfterLocation) {
-                        val serviceCategory = when (category) {
-                            "Any Available Provider" -> "Any"
-                            "Electrician" -> "Electrical"
-                            "Plumber" -> "Plumbing"
-                            "AC Technician" -> "AC Repair"
-                            else -> category
-                        }
+                        val serviceCategory = if (category == "Any Available Provider") {
+                            "Any"
+                        } else category
                         viewModel.sendAlert(point, note, serviceCategory)
                     }
                     sendAfterLocation = false

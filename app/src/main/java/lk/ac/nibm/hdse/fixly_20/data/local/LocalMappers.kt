@@ -65,10 +65,10 @@ fun User.toProfileEntity() = UserProfileEntity(
     isVerified = isVerified,
     ratingSum = ratingSum,
     ratingCount = ratingCount,
-    emergencyAvailable = emergencyAvailable,
-    lastLatitude = lastLocation?.latitude,
-    lastLongitude = lastLocation?.longitude,
-    lastLocationAtMillis = lastLocationAt?.time
+    emergencyAvailable = false,
+    lastLatitude = null,
+    lastLongitude = null,
+    lastLocationAtMillis = null
 )
 
 fun UserProfileEntity.toUser() = User(
@@ -82,7 +82,5 @@ fun UserProfileEntity.toUser() = User(
     isVerified = isVerified,
     ratingSum = ratingSum,
     ratingCount = ratingCount,
-    emergencyAvailable = emergencyAvailable,
-    lastLocation = if (lastLatitude != null && lastLongitude != null) GeoPoint(lastLatitude, lastLongitude) else null,
-    lastLocationAt = lastLocationAtMillis?.let { Date(it) }
+    availableForEmergency = false
 )

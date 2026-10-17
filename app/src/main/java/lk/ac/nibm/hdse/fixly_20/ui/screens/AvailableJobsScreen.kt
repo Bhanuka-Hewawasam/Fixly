@@ -3,7 +3,6 @@ package lk.ac.nibm.hdse.fixly_20.ui.screens
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
-import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -23,10 +22,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.firebase.firestore.GeoPoint
-import kotlinx.coroutines.delay
 import lk.ac.nibm.hdse.fixly_20.model.JobPost
 import lk.ac.nibm.hdse.fixly_20.viewmodel.AvailableJobsViewModel
-import lk.ac.nibm.hdse.fixly_20.viewmodel.ProviderAvailabilityViewModel
 
 private val radiusOptionsKm = listOf(10, 25, 50, 100)
 
@@ -35,18 +32,15 @@ private val radiusOptionsKm = listOf(10, 25, 50, 100)
 @Composable
 fun AvailableJobsScreen(
     onBack: () -> Unit,
-    viewModel: AvailableJobsViewModel = viewModel(),
-    availabilityViewModel: ProviderAvailabilityViewModel = viewModel()
+    viewModel: AvailableJobsViewModel = viewModel()
 ) {
     val context = LocalContext.current
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
     val uiState by viewModel.uiState.collectAsState()
-    val availability by availabilityViewModel.uiState.collectAsState()
     var selectedJob by remember { mutableStateOf<JobPost?>(null) }
     var isLocating by remember { mutableStateOf(false) }
     var locationFailed by remember { mutableStateOf(false) }
-    var showNotificationRationale by remember { mutableStateOf(false) }
 
     // Gets a fresh GPS fix for the provider; the ViewModel then filters jobs around it
     fun fetchLocation() {
@@ -91,37 +85,8 @@ fun AvailableJobsScreen(
         else permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
     }
 
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        availabilityViewModel.setAvailable(true, uiState.providerLocation)
-        if (!granted) availabilityViewModel.showNotificationPermissionWarning()
-    }
-
     // Ask for location as soon as the screen opens
     LaunchedEffect(Unit) { requestLocation() }
-
-    // If the emergency switch is ON, keep the position customers can see up to date
-    LaunchedEffect(uiState.providerLocation, availability.isAvailable) {
-        val currentLocation = uiState.providerLocation
-        if (availability.isAvailable && currentLocation != null) {
-            availabilityViewModel.refreshLocation(currentLocation)
-        }
-    }
-
-    LaunchedEffect(availability.isAvailable) {
-        if (availability.isAvailable) {
-            while (true) {
-                val hasPermission = ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.ACCESS_FINE_LOCATION
-                ) == PackageManager.PERMISSION_GRANTED
-                if (!hasPermission) break
-                fetchLocation()
-                delay(60_000L)
-            }
-        }
-    }
 
     LaunchedEffect(uiState.bidSubmittedJobId) {
         if (uiState.bidSubmittedJobId != null) {
@@ -140,7 +105,7 @@ fun AvailableJobsScreen(
     ) { padding ->
         when {
             // --- Step A: we don't know where the provider is yet ---
-            uiState.providerLocation == null && !availability.isAvailable -> {
+            uiState.providerLocation == null -> {
                 Box(
                     modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp),
                     contentAlignment = Alignment.Center
@@ -172,29 +137,9 @@ fun AvailableJobsScreen(
                 }
             }
 
-            // --- Step C: emergency switch + radius chips + nearby jobs ---
+            // --- Step C: radius chips + nearby jobs ---
             else -> {
                 Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-                    EmergencyAvailabilityCard(
-                        isAvailable = availability.isAvailable,
-                        isUpdating = availability.isUpdating,
-                        errorMessage = availability.errorMessage,
-                        onToggle = { checked ->
-                            if (!checked) {
-                                availabilityViewModel.setAvailable(false, uiState.providerLocation)
-                            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                                ContextCompat.checkSelfPermission(
-                                    context,
-                                    Manifest.permission.POST_NOTIFICATIONS
-                                ) != PackageManager.PERMISSION_GRANTED
-                            ) {
-                                showNotificationRationale = true
-                            } else {
-                                availabilityViewModel.setAvailable(true, uiState.providerLocation)
-                            }
-                        }
-                    )
-
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -250,78 +195,6 @@ fun AvailableJobsScreen(
         )
     }
 
-    if (showNotificationRationale) {
-        AlertDialog(
-            onDismissRequest = { showNotificationRationale = false },
-            title = { Text("Receive emergency alerts") },
-            text = {
-                Text("Allow notifications so nearby customers' emergency requests can reach you when Fixly is in the background.")
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showNotificationRationale = false
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        }
-                    }
-                ) { Text("Allow notifications") }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        showNotificationRationale = false
-                        availabilityViewModel.setAvailable(true, uiState.providerLocation)
-                        availabilityViewModel.showNotificationPermissionWarning()
-                    }
-                ) { Text("Continue without") }
-            }
-        )
-    }
-}
-
-@Composable
-private fun EmergencyAvailabilityCard(
-    isAvailable: Boolean,
-    isUpdating: Boolean,
-    errorMessage: String?,
-    onToggle: (Boolean) -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        "🚨 Available for emergencies",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                    Text(
-                        "When Emergency Availability is ON, your current location will be shared with nearby customers who are searching for emergency help. Turn it OFF at any time to stop sharing.\nOnline emergency alerts are active while you are logged in and available.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Switch(
-                    checked = isAvailable,
-                    onCheckedChange = onToggle,
-                    enabled = !isUpdating
-                )
-            }
-
-            errorMessage?.let {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-            }
-        }
-    }
 }
 
 @Composable

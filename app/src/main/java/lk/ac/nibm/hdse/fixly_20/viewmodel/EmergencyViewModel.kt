@@ -18,7 +18,6 @@ import lk.ac.nibm.hdse.fixly_20.util.EmergencyProviderMatcher
 data class ProviderWithDistance(
     val provider: User,
     val distanceKm: Double,
-    val minutesAgo: Long, // how long ago the provider last shared their location
     val isDemo: Boolean = false
 )
 
@@ -27,8 +26,8 @@ data class EmergencyUiState(
     val customerLocation: GeoPoint? = null,
     val selectedCategory: String = "Any Available Provider",
     val radiusKm: Int = 10,
-    val allProviders: List<User> = emptyList(), // everyone who has "Available for emergencies" ON
-    val results: List<ProviderWithDistance> = emptyList() // allProviders after category/distance/freshness filters
+    val allProviders: List<User> = emptyList(),
+    val results: List<ProviderWithDistance> = emptyList()
 )
 
 class EmergencyViewModel(
@@ -105,7 +104,7 @@ class EmergencyViewModel(
             currentUid = firebaseAuth.currentUser?.uid,
             currentEmail = firebaseAuth.currentUser?.email
         )
-        val results = matches.map { ProviderWithDistance(it.provider, it.distanceKm, it.minutesAgo) }
+        val results = matches.map { ProviderWithDistance(it.provider, it.distanceKm) }
 
         return state.copy(results = results)
     }
