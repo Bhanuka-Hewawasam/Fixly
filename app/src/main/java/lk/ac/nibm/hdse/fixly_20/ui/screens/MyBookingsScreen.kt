@@ -2,17 +2,31 @@ package lk.ac.nibm.hdse.fixly_20.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import lk.ac.nibm.hdse.fixly_20.model.JobPost
+import lk.ac.nibm.hdse.fixly_20.ui.components.BottomNavItem
+import lk.ac.nibm.hdse.fixly_20.ui.components.FixlyBottomNavBar
+import lk.ac.nibm.hdse.fixly_20.ui.components.getCategoryVectorIcon
 import lk.ac.nibm.hdse.fixly_20.viewmodel.MyBookingsViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -21,15 +35,59 @@ fun MyBookingsScreen(
     onBack: () -> Unit,
     onOpenJobBids: (jobId: String) -> Unit,
     onTrackProvider: (jobId: String) -> Unit,
+    onHome: () -> Unit = {},
+    onEmergency: () -> Unit = {},
+    onProfile: (String) -> Unit = {},
     viewModel: MyBookingsViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val activeCount = uiState.jobs.count { it.status in listOf("Open", "Accepted", "In Progress", "Assigned") }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("My Bookings") },
-                navigationIcon = { TextButton(onClick = onBack) { Text("Back") } }
+                title = { Text("My Bookings", fontWeight = FontWeight.Bold, fontSize = 20.sp) },
+                navigationIcon = {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.padding(start = 12.dp).size(40.dp)
+                    ) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", modifier = Modifier.size(20.dp))
+                        }
+                    }
+                },
+                actions = {
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.padding(end = 16.dp)
+                    ) {
+                        Text(
+                            text = "$activeCount Active",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontSize = 12.sp
+                            ),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+            )
+        },
+        bottomBar = {
+            FixlyBottomNavBar(
+                currentRoute = BottomNavItem.History.route,
+                activeRole = "customer",
+                onNavigate = { route ->
+                    when (route) {
+                        "home" -> onHome()
+                        "emergency_sos" -> onEmergency()
+                        "profile" -> onProfile("customer")
+                    }
+                }
             )
         }
     ) { padding ->
@@ -47,8 +105,8 @@ fun MyBookingsScreen(
             else -> {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize().padding(padding),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    contentPadding = PaddingValues(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     items(uiState.jobs) { job ->
                         BookingCard(
@@ -70,88 +128,302 @@ private fun BookingCard(
     onTrack: () -> Unit
 ) {
     val context = LocalContext.current
+    val categoryIcon = getCategoryVectorIcon(job.category)
 
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(job.category, style = MaterialTheme.typography.titleMedium)
-                AssistChip(onClick = {}, label = { Text(job.status) })
-            }
-            if (job.isEmergency) {
-                Text(
-                    "Emergency request",
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.labelMedium
-                )
-            }
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(job.description, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
-            Spacer(modifier = Modifier.height(12.dp))
+    val isProgress = job.status in listOf("Accepted", "Assigned", "In Progress")
+    val isOpen = job.status == "Open"
 
-            if (!job.isEmergency && job.assignedProviderId != null &&
-                job.status in listOf("Accepted", "In Progress", "Completed")
+    val statusContainerColor = when {
+        isOpen -> Color(0xFFD1FAE5)
+        isProgress -> Color(0xFFFEF3C7)
+        else -> Color(0xFFEFF6FF)
+    }
+    val statusTextColor = when {
+        isOpen -> Color(0xFF059669)
+        isProgress -> Color(0xFFD97706)
+        else -> Color(0xFF2563EB)
+    }
+    val statusText = when {
+        isOpen -> "Open for Bids"
+        isProgress -> "In Progress"
+        else -> job.status
+    }
+
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            // Header Row: Icon + Category + Request ID + Status Pill
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    job.assignedProviderName ?: "Provider",
-                    style = MaterialTheme.typography.titleSmall
-                )
-                Text(
-                    if ((job.acceptedProviderReviewCount ?: 0) > 0) {
-                        "Rating: ${"%.1f".format(job.acceptedProviderRating ?: 0.0)} " +
-                            "(${job.acceptedProviderReviewCount} reviews)"
-                    } else {
-                        "No reviews yet"
-                    },
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                job.acceptedBidPrice?.let {
-                    Text("Accepted price: Rs. ${"%.2f".format(it)}", style = MaterialTheme.typography.bodyMedium)
-                }
-                job.providerCertificateUrl?.takeIf { it.isNotBlank() }?.let { certificateUrl ->
-                    OutlinedButton(
-                        onClick = {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(certificateUrl)))
-                        },
-                        modifier = Modifier.fillMaxWidth()
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color(0xFFEFF6FF)),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text("View Provider Certificate")
+                        Icon(
+                            imageVector = categoryIcon,
+                            contentDescription = null,
+                            tint = Color(0xFF2563EB),
+                            modifier = Modifier.size(22.dp)
+                        )
                     }
-                }
-                if (!job.providerPhone.isNullOrBlank()) {
-                    Button(
-                        onClick = {
-                            context.startActivity(
-                                Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", job.providerPhone, null))
+                    Column {
+                        Text(
+                            text = job.category,
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                color = Color(0xFF1E293B)
                             )
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Call Provider")
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Request ID: #${job.jobId.takeLast(6).uppercase()}",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = Color(0xFF64748B),
+                                fontSize = 12.sp
+                            )
+                        )
                     }
-                } else {
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = statusContainerColor
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(statusTextColor)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = statusText,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = statusTextColor,
+                                fontSize = 11.5.sp
+                            )
+                        )
+                    }
+                }
+            }
+
+            // Description Quote Box
+            if (job.description.isNotBlank()) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = Color(0xFFF8FAFC),
+                    border = BorderStroke(1.dp, Color(0xFFF1F5F9)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Text(
-                        "Provider hasn't added a phone number",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
+                        text = "\"${job.description}\"",
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                            color = Color(0xFF475569),
+                            fontSize = 13.5.sp
+                        ),
+                        modifier = Modifier.padding(14.dp)
                     )
                 }
             }
 
+            // Assigned Provider or Bids Info
+            if (!job.isEmergency && job.assignedProviderId != null &&
+                job.status in listOf("Accepted", "In Progress", "Completed")
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFF1F5F9)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Person,
+                                contentDescription = null,
+                                tint = Color(0xFF64748B),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = "Assigned Provider",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = Color(0xFF64748B),
+                                    fontSize = 11.5.sp
+                                )
+                            )
+                            Text(
+                                text = job.assignedProviderName ?: "Provider",
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = Color(0xFF1E293B)
+                                )
+                            )
+                        }
+                    }
+
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = if ((job.acceptedProviderReviewCount ?: 0) > 0) {
+                                "★ ${"%.1f".format(job.acceptedProviderRating ?: 0.0)}"
+                            } else {
+                                "No reviews yet"
+                            },
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = Color(0xFF64748B),
+                                fontSize = 12.sp
+                            )
+                        )
+                        job.acceptedBidPrice?.let {
+                            Text(
+                                text = "Rs. ${"%.2f".format(it)}",
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF2563EB),
+                                    fontSize = 13.5.sp
+                                )
+                            )
+                        }
+                    }
+                }
+            } else if (isOpen) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = Color(0xFFF8FAFC),
+                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Handyman,
+                                contentDescription = null,
+                                tint = Color(0xFF2563EB),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "Providers Bidding",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF1E293B),
+                                    fontSize = 13.sp
+                                )
+                            )
+                        }
+                        Text(
+                            text = "Active bids available",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = Color(0xFF2563EB),
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 12.5.sp
+                            )
+                        )
+                    }
+                }
+            }
+
+            job.providerCertificateUrl?.takeIf { it.isNotBlank() }?.let { certificateUrl ->
+                OutlinedButton(
+                    onClick = {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(certificateUrl)))
+                    },
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("View Provider Certificate")
+                }
+            }
+            job.providerPhone?.takeIf { it.isNotBlank() }?.let { phone ->
+                Button(
+                    onClick = {
+                        context.startActivity(
+                            Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", phone, null))
+                        )
+                    },
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Call Provider")
+                }
+            }
+
+            // Action Buttons
             when (job.status) {
                 "Open" -> {
-                    Button(onClick = onViewBids, modifier = Modifier.fillMaxWidth()) {
-                        Text("View Bids")
+                    Button(
+                        onClick = onViewBids,
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                    ) {
+                        Icon(Icons.Outlined.Visibility, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("View Bids", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
                     }
                 }
                 "Accepted", "Assigned", "In Progress" -> {
-                    Button(onClick = onTrack, modifier = Modifier.fillMaxWidth()) {
-                        Text("Track Provider")
+                    Button(
+                        onClick = onTrack,
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                    ) {
+                        Icon(Icons.Outlined.Navigation, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Track Provider", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
                     }
                 }
                 "Completed" -> {
-                    // Opens the same screen, which shows the before/after photos for completed jobs
-                    OutlinedButton(onClick = onTrack, modifier = Modifier.fillMaxWidth()) {
-                        Text("View Work Evidence")
+                    OutlinedButton(
+                        onClick = onTrack,
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                    ) {
+                        Text("View Work Evidence", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
                     }
                 }
             }

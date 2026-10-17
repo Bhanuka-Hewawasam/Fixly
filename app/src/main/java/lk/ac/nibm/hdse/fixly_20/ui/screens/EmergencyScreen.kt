@@ -10,25 +10,31 @@ import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Send
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
@@ -47,17 +53,17 @@ import lk.ac.nibm.hdse.fixly_20.data.repository.EmergencyAlertRepository
 import lk.ac.nibm.hdse.fixly_20.model.EmergencyAlert
 import lk.ac.nibm.hdse.fixly_20.model.EmergencyAlertPolicy
 import lk.ac.nibm.hdse.fixly_20.model.User
+import lk.ac.nibm.hdse.fixly_20.ui.components.BottomNavItem
+import lk.ac.nibm.hdse.fixly_20.ui.components.FixlyBottomNavBar
 import lk.ac.nibm.hdse.fixly_20.ui.components.formatRating
 import lk.ac.nibm.hdse.fixly_20.util.EmergencyProviderMatcher
 import lk.ac.nibm.hdse.fixly_20.util.openInMaps
 import lk.ac.nibm.hdse.fixly_20.viewmodel.EmergencyViewModel
 import lk.ac.nibm.hdse.fixly_20.viewmodel.ProviderWithDistance
 import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 
 private val categoryFilters = listOf(
-    "Any Available Provider",
     "Vehicle Mechanic",
     "Electrician",
     "Plumber",
@@ -65,7 +71,6 @@ private val categoryFilters = listOf(
     "Computer Technician",
     "Other"
 )
-private val radiusOptionsKm = listOf(5, 10, 25, 50)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("MissingPermission") // permission is checked in requestLocation() before any location call
@@ -73,7 +78,8 @@ private val radiusOptionsKm = listOf(5, 10, 25, 50)
 fun EmergencyScreen(
     onBack: () -> Unit,
     onPostUrgentJob: () -> Unit,
-    viewModel: EmergencyViewModel = viewModel()
+    viewModel: EmergencyViewModel = viewModel(),
+    onNavigate: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     val isDebugBuild = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
@@ -272,8 +278,74 @@ fun EmergencyScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("🚨 Emergency Help") },
-                navigationIcon = { TextButton(onClick = onBack) { Text("Back") } }
+                title = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(9.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFEF4444))
+                        )
+                        Text(
+                            text = "Emergency",
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 19.sp,
+                                color = Color(0xFF0F172A)
+                            )
+                        )
+                    }
+                },
+                navigationIcon = {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color(0xFFF1F5F9),
+                        modifier = Modifier.padding(start = 12.dp).size(38.dp)
+                    ) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color(0xFF334155), modifier = Modifier.size(18.dp))
+                        }
+                    }
+                },
+                actions = {
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = Color(0xFFFEE2E2),
+                        border = BorderStroke(1.dp, Color(0xFFFECACA)),
+                        modifier = Modifier.padding(end = 16.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.ElectricBolt,
+                                contentDescription = null,
+                                tint = Color(0xFFDC2626),
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = "24/7 Live",
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFDC2626),
+                                    fontSize = 11.5.sp
+                                )
+                            )
+                        }
+                    }
+                }
+            )
+        },
+        bottomBar = {
+            FixlyBottomNavBar(
+                currentRoute = BottomNavItem.Emergency.route,
+                activeRole = "customer",
+                onNavigate = onNavigate
             )
         }
     ) { padding ->
@@ -306,34 +378,108 @@ fun EmergencyScreen(
 
             // --- Step B: filters + map + registered service locations ---
             else -> {
-                Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .verticalScroll(rememberScrollState())
+                        .padding(bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
 
+                    // --- URGENT ALERT BANNER ---
                     Card(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(24.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    brush = Brush.linearGradient(
+                                        colors = listOf(Color(0xFFEF4444), Color(0xFFE11D48), Color(0xFFBE123C))
+                                    )
+                                )
+                                .padding(18.dp)
                         ) {
-                            Text(
-                                "Find help near you",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                            Text(
-                                "Showing available providers within ${uiState.radiusKm} km. Closest providers appear first.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(Color.White.copy(alpha = 0.2f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.WarningAmber,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(
+                                        text = "Urgent help, when you need it",
+                                        style = MaterialTheme.typography.titleMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White,
+                                            fontSize = 16.sp
+                                        )
+                                    )
+
+                                    Text(
+                                        text = "We'll share your real-time location and instantly notify nearby available emergency providers.",
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            color = Color.White.copy(alpha = 0.9f),
+                                            fontSize = 12.5.sp,
+                                            lineHeight = 17.sp
+                                        )
+                                    )
+
+                                    Spacer(modifier = Modifier.height(2.dp))
+
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = Color.Black.copy(alpha = 0.2f)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.LocationOn,
+                                                contentDescription = null,
+                                                tint = Color(0xFFFCD34D),
+                                                modifier = Modifier.size(13.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(5.dp))
+                                            Text(
+                                                text = "Location verified on request",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = Color.White,
+                                                    fontSize = 11.5.sp
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
 
                     // --- DEBUG ONLY ACTIONS FOR TESTING ---
                     if (isDebugBuild) {
-                        Spacer(modifier = Modifier.height(8.dp))
                         Card(
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
@@ -352,65 +498,384 @@ fun EmergencyScreen(
                         }
                     }
 
-                    Text(
-                        "Choose the help you need",
-                        style = MaterialTheme.typography.titleSmall,
-                        modifier = Modifier.padding(start = 16.dp, top = 8.dp)
-                    )
-                    Row(
-                        modifier = Modifier
-                            .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 16.dp, vertical = 2.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    // --- CHOOSE THE HELP YOU NEED SECTION ---
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        categoryFilters.forEach { category ->
-                            FilterChip(
-                                selected = uiState.selectedCategory == category,
-                                onClick = { viewModel.setCategory(category) },
-                                label = { Text(category) }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "CHOOSE HELP TYPE",
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF0F172A),
+                                    letterSpacing = 0.5.sp,
+                                    fontSize = 12.sp
+                                )
+                            )
+                            Text(
+                                text = "Select 1 option",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = Color(0xFF94A3B8),
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 11.5.sp
+                                )
+                            )
+                        }
+
+                        // 2-Column Grid for categories
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            categoryFilters.chunked(2).forEach { rowItems ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    rowItems.forEach { cat ->
+                                        val isSelected = uiState.selectedCategory == cat
+                                        val icon = when (cat.lowercase().trim()) {
+                                            "vehicle mechanic" -> Icons.Outlined.Build
+                                            "electrician" -> Icons.Outlined.ElectricBolt
+                                            "plumber" -> Icons.Outlined.WaterDrop
+                                            "ac technician" -> Icons.Outlined.AcUnit
+                                            "computer technician", "computer tech" -> Icons.Outlined.Computer
+                                            else -> Icons.Outlined.MoreHoriz
+                                        }
+
+                                        Card(
+                                            onClick = { viewModel.setCategory(cat) },
+                                            shape = RoundedCornerShape(16.dp),
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = MaterialTheme.colorScheme.surface
+                                            ),
+                                            border = BorderStroke(
+                                                1.dp,
+                                                if (isSelected) Color(0xFFEF4444) else Color(0xFFE2E8F0)
+                                            ),
+                                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(34.dp)
+                                                        .clip(RoundedCornerShape(10.dp))
+                                                        .background(Color(0xFFF1F5F9)),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        imageVector = icon,
+                                                        contentDescription = null,
+                                                        tint = Color(0xFF475569),
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                }
+                                                Text(
+                                                    text = when (cat) {
+                                                        "Computer Technician" -> "Computer Tech"
+                                                        "Other" -> "Other Service"
+                                                        else -> cat
+                                                    },
+                                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 12.5.sp,
+                                                        color = Color(0xFF1E293B)
+                                                    ),
+                                                    maxLines = 1
+                                                )
+                                            }
+                                        }
+                                    }
+                                    if (rowItems.size == 1) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
+                                }
+                            }
+                        }
+
+                        // Any Available Provider (Full Width Highlighted Card below grid)
+                        Card(
+                            onClick = { viewModel.setCategory("Any Available Provider") },
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = Color(0xFFEF4444)
+                            ),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 2.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(Color.White.copy(alpha = 0.2f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Security,
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Column {
+                                        Text(
+                                            text = "Any Available Provider",
+                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White,
+                                                fontSize = 14.5.sp
+                                            )
+                                        )
+                                        Spacer(modifier = Modifier.height(1.dp))
+                                        Text(
+                                            text = "Fastest dispatch response",
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                color = Color.White.copy(alpha = 0.9f),
+                                                fontSize = 11.5.sp
+                                            )
+                                        )
+                                    }
+                                }
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // --- OPTIONAL NOTES BOX ("What happened?") ---
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.ChatBubbleOutline,
+                                        contentDescription = null,
+                                        tint = Color(0xFF64748B),
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Text(
+                                        text = "What happened?",
+                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 13.5.sp, color = Color(0xFF334155))
+                                    )
+                                    Text(
+                                        text = "(optional)",
+                                        style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF94A3B8), fontSize = 11.5.sp)
+                                    )
+                                }
+                                Text(
+                                    text = "${requestNote.length}/500",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF94A3B8), fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = requestNote,
+                                onValueChange = { if (it.length <= 500) requestNote = it },
+                                placeholder = {
+                                    Text(
+                                        text = "Describe your emergency situation briefly...",
+                                        style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF94A3B8), fontSize = 12.sp)
+                                    )
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = Color(0xFFEF4444),
+                                    unfocusedBorderColor = Color(0xFFE2E8F0),
+                                    focusedContainerColor = Color(0xFFF8FAFC),
+                                    unfocusedContainerColor = Color(0xFFF8FAFC)
+                                ),
+                                modifier = Modifier.fillMaxWidth()
                             )
                         }
                     }
 
-                    Text(
-                        "Search radius",
-                        style = MaterialTheme.typography.titleSmall,
-                        modifier = Modifier.padding(start = 16.dp, top = 2.dp)
-                    )
-                    Row(
+                    // --- ACTION BUTTONS & LOCATION ---
+                    Column(
                         modifier = Modifier
-                            .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 16.dp, vertical = 2.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        radiusOptionsKm.forEach { km ->
-                            FilterChip(
-                                selected = uiState.radiusKm == km,
-                                onClick = { viewModel.setRadius(km) },
-                                label = { Text("$km km") }
+                        OutlinedButton(
+                            onClick = { requestLocation() },
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = Color(0xFFF8FAFC),
+                                contentColor = Color(0xFF334155)
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.MyLocation,
+                                contentDescription = null,
+                                tint = Color(0xFFEF4444),
+                                modifier = Modifier.size(17.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (isLocating) "Getting location…" else "Get my current location",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            )
+                        }
+
+                        // Primary Send Emergency Request Button
+                        Button(
+                            onClick = {
+                                if (displayedProviders.isNotEmpty()) {
+                                    requestingProvider = displayedProviders.first()
+                                } else {
+                                    requestErrorMessage = "No providers available nearby."
+                                }
+                            },
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.Transparent
+                            ),
+                            contentPadding = PaddingValues(0.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        brush = Brush.linearGradient(
+                                            colors = listOf(Color(0xFFDC2626), Color(0xFFE11D48))
+                                        ),
+                                        shape = RoundedCornerShape(16.dp)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Outlined.Send,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Send Emergency Request",
+                                        style = MaterialTheme.typography.titleSmall.copy(
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = Color.White,
+                                            fontSize = 13.5.sp
+                                        )
+                                    )
+                                }
+                            }
+                        }
+
+                        // Privacy badge text
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Lock,
+                                contentDescription = null,
+                                tint = Color(0xFF94A3B8),
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = "Your location is shared only to help providers reach you.",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = Color(0xFF94A3B8),
+                                    fontSize = 11.sp
+                                ),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+
+                        OutlinedButton(
+                            onClick = onPostUrgentJob,
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                contentColor = Color(0xFF475569)
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                        ) {
+                            Text(
+                                text = "Browse nearby providers instead",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
                             )
                         }
                     }
 
-                    // --- Google Map ---
+                    // --- Google Map & Provider Results ---
                     if (customerLatLng != null) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(190.dp)
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                                .height(220.dp)
+                                .padding(horizontal = 20.dp, vertical = 4.dp)
+                                .clip(RoundedCornerShape(20.dp))
                         ) {
                             GoogleMap(
                                 modifier = Modifier.fillMaxSize(),
                                 cameraPositionState = cameraPositionState
                             ) {
-                                // Customer location marker
                                 Marker(
                                     state = MarkerState(position = customerLatLng),
                                     title = "You are here"
                                 )
 
-                                // Provider markers
                                 displayedProviders.forEach { item ->
                                     val latitude = item.provider.serviceLatitude
                                     val longitude = item.provider.serviceLongitude
@@ -429,15 +894,15 @@ fun EmergencyScreen(
                                 }
                             }
                             Surface(
-                                modifier = Modifier.align(Alignment.TopStart).padding(10.dp),
+                                modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
                                 shape = RoundedCornerShape(50),
                                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
                                 tonalElevation = 3.dp
                             ) {
                                 Text(
                                     "${displayedProviders.size} available",
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                                    style = MaterialTheme.typography.labelLarge,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.primary
                                 )
                             }
@@ -447,7 +912,7 @@ fun EmergencyScreen(
                     when {
                         uiState.isLoading -> {
                             Box(
-                                modifier = Modifier.fillMaxWidth().weight(1f),
+                                modifier = Modifier.fillMaxWidth().height(150.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 CircularProgressIndicator()
@@ -456,7 +921,7 @@ fun EmergencyScreen(
 
                         displayedProviders.isEmpty() -> {
                             Box(
-                                modifier = Modifier.fillMaxWidth().weight(1f).padding(24.dp),
+                                modifier = Modifier.fillMaxWidth().padding(24.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -472,12 +937,11 @@ fun EmergencyScreen(
                         }
 
                         else -> {
-                            LazyColumn(
-                                modifier = Modifier.fillMaxWidth().weight(1f),
-                                contentPadding = PaddingValues(16.dp),
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                items(displayedProviders, key = { it.provider.uid }) { item ->
+                                displayedProviders.forEach { item ->
                                     ProviderCard(
                                         item = item,
                                         category = uiState.selectedCategory,
@@ -513,6 +977,7 @@ fun EmergencyScreen(
     requestingProvider?.let { item ->
         AlertDialog(
             onDismissRequest = { requestingProvider = null },
+            shape = RoundedCornerShape(24.dp),
             title = { Text("Request Help from ${item.provider.name}") },
             text = {
                 Column {
@@ -559,6 +1024,7 @@ fun EmergencyScreen(
                             }
                         }
                     },
+                    shape = RoundedCornerShape(12.dp),
                     enabled = !isSendingRequest
                 ) {
                     if (isSendingRequest) {
@@ -620,6 +1086,7 @@ fun EmergencyScreen(
                     colors = CardDefaults.cardColors(
                         containerColor = if (isAccepted) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer
                     ),
+                    shape = RoundedCornerShape(20.dp),
                     elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
                     modifier = Modifier.fillMaxWidth().clickable { isMinimized = false }
                 ) {
@@ -639,7 +1106,10 @@ fun EmergencyScreen(
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
-                        Button(onClick = { isMinimized = false }) {
+                        Button(
+                            onClick = { isMinimized = false },
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
                             Text("Open")
                         }
                     }
@@ -655,7 +1125,7 @@ fun EmergencyScreen(
                         isMinimized = true
                     }
                 },
-                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
                 containerColor = MaterialTheme.colorScheme.surface
             ) {
                 Column(
@@ -699,6 +1169,7 @@ fun EmergencyScreen(
                             ?.let { providerId -> displayedProviders.firstOrNull { it.provider.uid == providerId }?.provider }
                         Card(
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                            shape = RoundedCornerShape(16.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(
@@ -716,6 +1187,7 @@ fun EmergencyScreen(
                                 )
                                 Button(
                                     onClick = { callProvider(selectedProviderPhone.orEmpty()) },
+                                    shape = RoundedCornerShape(12.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text("Call provider")
@@ -752,6 +1224,7 @@ fun EmergencyScreen(
                         isAccepted -> {
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                                shape = RoundedCornerShape(16.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
@@ -796,6 +1269,7 @@ fun EmergencyScreen(
                                 if (!alert?.acceptedProviderPhone.isNullOrBlank()) {
                                     Button(
                                         onClick = { alert.acceptedProviderPhone.let { callProvider(it) } },
+                                        shape = RoundedCornerShape(12.dp),
                                         modifier = Modifier.weight(1f)
                                     ) {
                                         Text("📞 Call Provider")
@@ -806,6 +1280,7 @@ fun EmergencyScreen(
                                         onClick = {
                                             context.openInMaps(alert.location!!.latitude, alert.location!!.longitude, alert.acceptedProviderName ?: "Provider")
                                         },
+                                        shape = RoundedCornerShape(12.dp),
                                         modifier = Modifier.weight(1f)
                                     ) {
                                         Text("🗺️ Open in Maps")
@@ -814,11 +1289,13 @@ fun EmergencyScreen(
                             }
                             OutlinedButton(
                                 onClick = { showCancelConfirmation = true },
+                                shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) { Text("Close request") }
                             if (showCancelConfirmation) {
                                 AlertDialog(
                                     onDismissRequest = { showCancelConfirmation = false },
+                                    shape = RoundedCornerShape(24.dp),
                                     title = { Text("Close this request?") },
                                     text = { Text("This will mark the accepted emergency request as closed.") },
                                     confirmButton = {
@@ -843,6 +1320,7 @@ fun EmergencyScreen(
                         isDeclined -> {
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                                shape = RoundedCornerShape(16.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(
@@ -858,6 +1336,7 @@ fun EmergencyScreen(
                             ) {
                                 Button(
                                     onClick = { activeRequestId = null },
+                                    shape = RoundedCornerShape(12.dp),
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Text("Choose Another Provider")
@@ -867,6 +1346,7 @@ fun EmergencyScreen(
                                         activeRequestId = null
                                         onBack()
                                     },
+                                    shape = RoundedCornerShape(12.dp),
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Text("Call Provider")
@@ -877,6 +1357,7 @@ fun EmergencyScreen(
                             Text("Request cancelled.")
                             Button(
                                 onClick = { activeRequestId = null },
+                                shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text("Return to Emergency Map")
@@ -886,12 +1367,14 @@ fun EmergencyScreen(
                             Text("This emergency request is closed.")
                             Button(
                                 onClick = { activeRequestId = null },
+                                shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) { Text("Return to Emergency Map") }
                         }
                         isExpired || remainingSeconds <= 0L -> {
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                                shape = RoundedCornerShape(16.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(
@@ -904,6 +1387,7 @@ fun EmergencyScreen(
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                                 Button(
                                     onClick = { activeRequestId = null },
+                                    shape = RoundedCornerShape(12.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text("Choose Another Provider")
@@ -913,6 +1397,7 @@ fun EmergencyScreen(
                                         activeRequestId = null
                                         onBack()
                                     },
+                                    shape = RoundedCornerShape(12.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text("Browse Nearby Providers")
@@ -931,6 +1416,7 @@ fun EmergencyScreen(
                             // ACTIVE / PENDING waiting state
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)),
+                                shape = RoundedCornerShape(16.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
@@ -957,11 +1443,13 @@ fun EmergencyScreen(
                             if (status == "ACTIVE") {
                                 OutlinedButton(
                                     onClick = { showCancelConfirmation = true },
+                                    shape = RoundedCornerShape(12.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 ) { Text("Cancel emergency request") }
                             } else if (isAccepted) {
                                 Button(
                                     onClick = { showCancelConfirmation = true },
+                                    shape = RoundedCornerShape(12.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 ) { Text("Close request") }
                             }
@@ -969,6 +1457,7 @@ fun EmergencyScreen(
                             if (showCancelConfirmation) {
                                 AlertDialog(
                                     onDismissRequest = { showCancelConfirmation = false },
+                                    shape = RoundedCornerShape(24.dp),
                                     title = { Text(if (isAccepted) "Close this request?" else "Cancel emergency request?") },
                                     text = {
                                         Text(
@@ -1021,19 +1510,22 @@ private fun ProviderCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 4.dp else 1.5.dp),
+        border = BorderStroke(if (isSelected) 2.dp else 1.dp, if (isSelected) MaterialTheme.colorScheme.primary else Color(0xFFE2E8F0)),
         colors = if (isSelected) {
             CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
         } else {
-            CardDefaults.cardColors()
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         }
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(18.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
-                    modifier = Modifier.size(48.dp).clip(CircleShape)
+                    modifier = Modifier.size(52.dp).clip(CircleShape)
                         .background(MaterialTheme.colorScheme.primaryContainer),
                     contentAlignment = Alignment.Center
                 ) {
@@ -1052,9 +1544,9 @@ private fun ProviderCard(
                     }
                 }
 
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(14.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(provider.name, style = MaterialTheme.typography.titleMedium)
+                    Text(provider.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text(
                         if (categoryRating.reviewCount > 0) {
                             formatRating(categoryRating.averageRating, categoryRating.reviewCount)
@@ -1063,7 +1555,8 @@ private fun ProviderCard(
                         } else {
                             "No reviews for $category yet"
                         },
-                        style = MaterialTheme.typography.bodySmall
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF64748B)
                     )
                 }
                 if (provider.isVerified) {
@@ -1083,11 +1576,12 @@ private fun ProviderCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(10.dp))
             Text(
                 "Services: ${provider.serviceCategories.joinToString(", ")}",
                 style = MaterialTheme.typography.bodyMedium
             )
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 "Service Location",
                 style = MaterialTheme.typography.titleSmall,
@@ -1098,11 +1592,14 @@ private fun ProviderCard(
                     .filter { it.isNotBlank() }
                     .joinToString(", ")
                     .ifBlank { "Location selected on map" },
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color(0xFF475569)
             )
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 "$distanceText km away • serves within ${provider.serviceRadiusKm} km",
-                style = MaterialTheme.typography.bodySmall
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFF64748B)
             )
             Text(
                 "This is the provider’s registered service area, not their live current location.",
@@ -1110,6 +1607,7 @@ private fun ProviderCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             if (isSelected) {
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     if (item.isDemo) {
                         "Sample preview only. Calls and requests are disabled."
@@ -1121,14 +1619,15 @@ private fun ProviderCard(
                 )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(14.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Button(
                     onClick = onRequestHelp,
                     enabled = !item.isDemo,
+                    shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp)
                 ) {
@@ -1137,6 +1636,7 @@ private fun ProviderCard(
                 OutlinedButton(
                     onClick = onClick,
                     enabled = !isSelected,
+                    shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp)
                 ) {
                     Text(if (isSelected) "Selected" else "View on map")
