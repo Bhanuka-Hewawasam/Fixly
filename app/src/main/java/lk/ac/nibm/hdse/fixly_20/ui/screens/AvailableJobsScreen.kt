@@ -8,7 +8,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -88,14 +90,18 @@ fun AvailableJobsScreen(
     // Ask for location as soon as the screen opens
     LaunchedEffect(Unit) { requestLocation() }
 
+    val snackbarHostState = remember { SnackbarHostState() }
+
     LaunchedEffect(uiState.bidSubmittedJobId) {
         if (uiState.bidSubmittedJobId != null) {
             selectedJob = null
+            snackbarHostState.showSnackbar("Bid placed successfully.")
             viewModel.clearBidSubmitted()
         }
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Jobs Near You") },
@@ -188,10 +194,13 @@ fun AvailableJobsScreen(
     selectedJob?.let { job ->
         BidDialog(
             job = job,
+            distanceKm = uiState.visibleJobs.firstOrNull { it.job.jobId == job.jobId }?.distanceKm,
             isSubmitting = uiState.isSubmittingBid,
             errorMessage = uiState.errorMessage,
-            onDismiss = { selectedJob = null },
-            onSubmit = { price, message -> viewModel.submitBid(job.jobId, price, message) }
+            onDismiss = { if (!uiState.isSubmittingBid) selectedJob = null },
+            onSubmit = { price, message, etaMinutes ->
+                viewModel.submitBid(job.jobId, price, message, etaMinutes)
+            }
         )
     }
 
@@ -232,32 +241,71 @@ private fun JobCard(job: JobPost, distanceKm: Double, onPlaceBid: () -> Unit) {
 @Composable
 private fun BidDialog(
     job: JobPost,
+    distanceKm: Double?,
     isSubmitting: Boolean,
     errorMessage: String?,
     onDismiss: () -> Unit,
-    onSubmit: (price: Double, message: String) -> Unit
+    onSubmit: (price: Double, message: String, estimatedArrivalMinutes: Int?) -> Unit
 ) {
     var price by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
+    var etaMinutes by remember { mutableStateOf("") }
+    val priceValue = price.toDoubleOrNull()
+    val etaValue = etaMinutes.toIntOrNull()
+    val etaIsValid = etaMinutes.isBlank() || (etaValue != null && etaValue in 1..1440)
 
     AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Bid on: ${job.category}") },
+        onDismissRequest = { if (!isSubmitting) onDismiss() },
+        title = { Text(job.category) },
         text = {
-            Column {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 520.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(job.description, style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "Preferred: ${job.preferredDate} ${job.preferredTime}",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                distanceKm?.let {
+                    Text(
+                        "Distance: ${String.format(java.util.Locale.getDefault(), "%.1f", it)} km",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
                 OutlinedTextField(
                     value = price,
-                    onValueChange = { price = it },
-                    label = { Text("Your Price (Rs.)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    onValueChange = { value ->
+                        if (value.matches(Regex("^\\d*\\.?\\d*$"))) price = value
+                    },
+                    label = { Text("Price (Rs.) *") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
+                    enabled = !isSubmitting,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = message,
                     onValueChange = { message = it },
                     label = { Text("Message (optional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isSubmitting
+                )
+                OutlinedTextField(
+                    value = etaMinutes,
+                    onValueChange = { value ->
+                        if (value.all(Char::isDigit)) etaMinutes = value
+                    },
+                    label = { Text("Estimated arrival (minutes, optional)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    enabled = !isSubmitting,
+                    isError = !etaIsValid,
+                    supportingText = {
+                        if (!etaIsValid) Text("Enter a value from 1 to 1440 minutes.")
+                    },
                     modifier = Modifier.fillMaxWidth()
                 )
                 errorMessage?.let {
@@ -269,20 +317,22 @@ private fun BidDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val priceValue = price.toDoubleOrNull()
-                    if (priceValue != null) onSubmit(priceValue, message)
+                    if (priceValue != null && priceValue > 0.0 && etaIsValid) {
+                        onSubmit(priceValue, message, etaValue)
+                    }
                 },
-                enabled = !isSubmitting && price.toDoubleOrNull() != null
+                enabled = !isSubmitting && priceValue != null && priceValue > 0.0 && etaIsValid,
+                modifier = Modifier.fillMaxWidth().height(52.dp)
             ) {
                 if (isSubmitting) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                 } else {
-                    Text("Submit Bid")
+                    Text("Place Bid")
                 }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss, enabled = !isSubmitting) { Text("Cancel") }
         }
     )
 }

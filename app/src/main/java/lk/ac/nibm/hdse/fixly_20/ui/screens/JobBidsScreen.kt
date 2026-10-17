@@ -168,7 +168,7 @@ private fun BidCard(
                 style = MaterialTheme.typography.bodySmall
             )
             Text(
-                bid.estimatedArrivalMinutes?.let { "ETA: $it min" } ?: "ETA: Not provided",
+                bid.estimatedArrivalMinutes?.let { "Arrives in ~$it min" } ?: "ETA: Not provided",
                 style = MaterialTheme.typography.bodySmall
             )
 

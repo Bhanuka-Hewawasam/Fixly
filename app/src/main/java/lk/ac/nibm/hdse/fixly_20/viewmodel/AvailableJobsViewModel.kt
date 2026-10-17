@@ -82,7 +82,22 @@ class AvailableJobsViewModel(
         return state.copy(visibleJobs = visible)
     }
 
-    fun submitBid(jobId: String, price: Double, message: String) {
+    fun submitBid(
+        jobId: String,
+        price: Double,
+        message: String,
+        estimatedArrivalMinutes: Int?
+    ) {
+        if (_uiState.value.isSubmittingBid) return
+        if (!price.isFinite() || price <= 0.0) {
+            _uiState.update { it.copy(errorMessage = "Enter a price greater than zero.") }
+            return
+        }
+        if (estimatedArrivalMinutes != null && estimatedArrivalMinutes !in 1..1440) {
+            _uiState.update { it.copy(errorMessage = "ETA must be between 1 and 1440 minutes.") }
+            return
+        }
+
         viewModelScope.launch {
             _uiState.update { it.copy(isSubmittingBid = true, errorMessage = null) }
 
@@ -106,7 +121,14 @@ class AvailableJobsViewModel(
             )
             val providerName = userRepository.getCurrentUserProfile().getOrNull()?.name ?: "Provider"
 
-            bidRepository.submitBid(jobId, providerName, price, message, distanceKm)
+            bidRepository.submitBid(
+                jobId,
+                providerName,
+                price,
+                message,
+                distanceKm,
+                estimatedArrivalMinutes
+            )
                 .onSuccess {
                     _uiState.update { it.copy(isSubmittingBid = false, bidSubmittedJobId = jobId) }
                 }

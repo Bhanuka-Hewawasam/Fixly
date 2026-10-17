@@ -28,13 +28,20 @@ class BidRepository(
         providerName: String,
         price: Double,
         message: String,
-        distanceKm: Double
+        distanceKm: Double,
+        estimatedArrivalMinutes: Int?
     ): Result<Unit> {
         return try {
             val providerId = firebaseAuth.currentUser?.uid
                 ?: return Result.failure(IllegalStateException("No logged-in user"))
+            require(price.isFinite() && price > 0.0) {
+                "Enter a price greater than zero."
+            }
             require(distanceKm.isFinite() && distanceKm >= 0.0) {
                 "A valid distance is required to place a bid."
+            }
+            require(estimatedArrivalMinutes == null || estimatedArrivalMinutes in 1..1440) {
+                "ETA must be between 1 and 1440 minutes."
             }
 
             val job = firestore.collection("jobPosts").document(jobId).get().await()
@@ -94,7 +101,8 @@ class BidRepository(
                 ratingCount = categoryRating?.reviewCount ?: 0,
                 isCertified = providerMetadata.first,
                 certificateUrl = providerMetadata.second,
-                distanceKm = distanceKm
+                distanceKm = distanceKm,
+                estimatedArrivalMinutes = estimatedArrivalMinutes
             )
             val bidBatch = firestore.batch()
             bidBatch.set(bidRef, bid)
