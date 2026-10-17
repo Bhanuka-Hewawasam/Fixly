@@ -6,49 +6,31 @@ import android.content.pm.PackageManager
 import android.location.LocationManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.outlined.LocationOn
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.location.LocationServices
@@ -66,6 +48,7 @@ import lk.ac.nibm.hdse.fixly_20.data.repository.ProviderRatingRepository
 import lk.ac.nibm.hdse.fixly_20.model.ProviderRatingAggregate
 import lk.ac.nibm.hdse.fixly_20.model.ServiceReview
 import lk.ac.nibm.hdse.fixly_20.model.ServiceRating
+import lk.ac.nibm.hdse.fixly_20.ui.theme.ThemeState
 import lk.ac.nibm.hdse.fixly_20.viewmodel.ProviderAvailabilityViewModel
 import java.util.Locale
 import kotlinx.coroutines.flow.flowOf
@@ -91,6 +74,7 @@ fun ProfileScreen(
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
+    val isDarkMode by ThemeState.isDarkMode.collectAsState()
     val reviewRepository = remember { ServiceReviewRepository() }
     val ratingRepository = remember { ProviderRatingRepository() }
     val providerId = uiState.user?.uid
@@ -108,6 +92,8 @@ fun ProfileScreen(
     )
     val providerReviews = reviewResult.getOrNull().orEmpty()
     var selectedReviewCategory by remember(providerId) { mutableStateOf("All") }
+    var showSettingsSheet by remember { mutableStateOf(false) }
+
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     var address by remember { mutableStateOf("") }
     var city by remember { mutableStateOf("") }
@@ -184,13 +170,36 @@ fun ProfileScreen(
     }
     LaunchedEffect(mapPoint) { cameraPositionState.position = CameraPosition.fromLatLngZoom(mapPoint, 14f) }
 
+    val userName = uiState.user?.name.orEmpty().ifBlank { "Semitha Binuk" }
+    val userInitials = userName.split(" ").let { parts ->
+        if (parts.size >= 2) "${parts[0].firstOrNull() ?: 'S'}${parts[1].firstOrNull() ?: 'B'}"
+        else "SB"
+    }.uppercase()
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Profile") },
+                title = { Text("Profile", fontWeight = FontWeight.Bold, fontSize = 20.sp) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.padding(start = 12.dp).size(40.dp)
+                    ) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", modifier = Modifier.size(20.dp))
+                        }
+                    }
+                },
+                actions = {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.padding(end = 16.dp).size(40.dp)
+                    ) {
+                        IconButton(onClick = { showSettingsSheet = true }) {
+                            Icon(Icons.Outlined.Settings, contentDescription = "Settings", modifier = Modifier.size(20.dp))
+                        }
                     }
                 }
             )
@@ -214,25 +223,152 @@ fun ProfileScreen(
                     .fillMaxSize()
                     .padding(padding)
                     .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(uiState.user?.name.orEmpty(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        Text(uiState.user?.phoneNumber.orEmpty(), style = MaterialTheme.typography.bodyMedium)
-                        Text(uiState.user?.email.orEmpty(), style = MaterialTheme.typography.bodySmall)
+                // USER PROFILE CARD
+                Card(
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            // Avatar with initials and verified badge
+                            Box(
+                                contentAlignment = Alignment.BottomEnd,
+                                modifier = Modifier.size(64.dp)
+                            ) {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(CircleShape)
+                                        .background(
+                                            brush = Brush.linearGradient(
+                                                colors = listOf(Color(0xFF2563EB), Color(0xFF4F46E5))
+                                            )
+                                        )
+                                ) {
+                                    Text(
+                                        text = userInitials,
+                                        style = MaterialTheme.typography.titleLarge.copy(
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF10B981)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = "Verified",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(16.dp))
+
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = userName,
+                                    style = MaterialTheme.typography.titleLarge.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 18.sp
+                                    )
+                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Phone,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = uiState.user?.phoneNumber.orEmpty().ifBlank { "077750062" },
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 13.sp
+                                        )
+                                    )
+                                }
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Email,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = uiState.user?.email.orEmpty().ifBlank { "semthabinuk152@gmail.com" },
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 12.5.sp
+                                        )
+                                    )
+                                }
+                            }
+                        }
+
+                        // User Stats Summary Strip
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = Color(0xFFF8FAFC),
+                            border = BorderStroke(1.dp, Color(0xFFF1F5F9)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                StatItem(value = "0", label = "Jobs Posted")
+                                VerticalDivider(modifier = Modifier.height(28.dp), color = Color(0xFFE2E8F0))
+                                StatItem(value = "${providerReviews.size}", label = "Reviews")
+                                VerticalDivider(modifier = Modifier.height(28.dp), color = Color(0xFFE2E8F0))
+                                StatItem(value = "★ 5.0", label = "Rating")
+                            }
+                        }
                     }
                 }
 
                 if (activeRole == "provider") {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+                        shape = RoundedCornerShape(24.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                        border = BorderStroke(1.dp, Color(0xFFE2E8F0))
                     ) {
                         Column(
-                            modifier = Modifier.padding(18.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                            modifier = Modifier.padding(20.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             Text("Service Location", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                             Text(
@@ -244,6 +380,7 @@ fun ProfileScreen(
                                 value = address,
                                 onValueChange = { address = it },
                                 label = { Text("Service address (optional)") },
+                                shape = RoundedCornerShape(14.dp),
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
                             )
@@ -251,6 +388,7 @@ fun ProfileScreen(
                                 value = city,
                                 onValueChange = { city = it },
                                 label = { Text("City or area (optional)") },
+                                shape = RoundedCornerShape(14.dp),
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
                             )
@@ -260,6 +398,7 @@ fun ProfileScreen(
                             ) {
                                 OutlinedButton(
                                     modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(14.dp),
                                     enabled = !isGettingLocation,
                                     onClick = {
                                         val fineGranted = ContextCompat.checkSelfPermission(
@@ -282,7 +421,7 @@ fun ProfileScreen(
                             }
                             Text("Or tap the map to select your registered service point.")
                             GoogleMap(
-                                modifier = Modifier.fillMaxWidth().height(230.dp),
+                                modifier = Modifier.fillMaxWidth().height(230.dp).clip(RoundedCornerShape(16.dp)),
                                 cameraPositionState = cameraPositionState,
                                 onMapClick = ::updateMapLocation
                             ) {
@@ -292,17 +431,20 @@ fun ProfileScreen(
                                     snippet = "Registered provider service point"
                                 )
                             }
-                            Icon(
-                                imageVector = Icons.Outlined.LocationOn,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                if (latitude.isBlank() || longitude.isBlank()) "Select a service point on the map"
-                                else "Latitude ${String.format(Locale.US, "%.6f", latitude.toDouble())}, " +
-                                    "Longitude ${String.format(Locale.US, "%.6f", longitude.toDouble())}",
-                                style = MaterialTheme.typography.bodySmall
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Icon(
+                                    imageVector = Icons.Outlined.LocationOn,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    if (latitude.isBlank() || longitude.isBlank()) "Select a service point on the map"
+                                    else "Latitude ${String.format(Locale.US, "%.6f", latitude.toDouble())}, " +
+                                        "Longitude ${String.format(Locale.US, "%.6f", longitude.toDouble())}",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
                             locationError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 
                             Text("Service radius: ${selectedRadius.toInt()} km", fontWeight = FontWeight.SemiBold)
@@ -326,7 +468,6 @@ fun ProfileScreen(
                                             label = { Text(category) }
                                         )
                                     }
-                                }
                                 }
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -354,6 +495,7 @@ fun ProfileScreen(
                             }
                             Button(
                                 modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(14.dp),
                                 enabled = !uiState.isUpdating && !isGettingLocation,
                                 onClick = {
                                     viewModel.saveServiceProfile(
@@ -372,23 +514,247 @@ fun ProfileScreen(
                             }
                         }
                     }
-                    ProviderReviewsSection(
-                        reviews = providerReviews,
-                        categories = (
-                            uiState.user?.serviceCategories.orEmpty() +
-                                providerReviews.map { it.serviceCategory }
-                            ).distinct(),
-                        offeredCategories = uiState.user?.serviceCategories.orEmpty(),
-                        serviceRatings = ratingResult.getOrNull()?.serviceRatings
-                            ?: uiState.user?.serviceRatings.orEmpty(),
-                        selectedCategory = selectedReviewCategory,
-                        onCategorySelected = { selectedReviewCategory = it },
-                        errorMessage = reviewResult.exceptionOrNull()?.localizedMessage
-                            ?: ratingResult.exceptionOrNull()?.localizedMessage
-                    )
+                }
+
+                // SERVICE REVIEWS SECTION
+                ProviderReviewsSection(
+                    reviews = providerReviews,
+                    categories = (
+                        uiState.user?.serviceCategories.orEmpty() +
+                            providerReviews.map { it.serviceCategory }
+                        ).distinct(),
+                    offeredCategories = uiState.user?.serviceCategories.orEmpty(),
+                    serviceRatings = ratingResult.getOrNull()?.serviceRatings
+                        ?: uiState.user?.serviceRatings.orEmpty(),
+                    selectedCategory = selectedReviewCategory,
+                    onCategorySelected = { selectedReviewCategory = it },
+                    errorMessage = reviewResult.exceptionOrNull()?.localizedMessage
+                        ?: ratingResult.exceptionOrNull()?.localizedMessage
+                )
+
+                // ACCOUNT QUICK LINKS SECTION
+                Card(
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    ) {
+                        QuickLinkItem(
+                            icon = Icons.Outlined.Person,
+                            title = "Account Details",
+                            onClick = { /* Action */ }
+                        )
+                        HorizontalDivider(color = Color(0xFFF1F5F9), modifier = Modifier.padding(horizontal = 20.dp))
+                        QuickLinkItem(
+                            icon = Icons.Outlined.Security,
+                            title = "Privacy & Security",
+                            onClick = { /* Action */ }
+                        )
+                    }
                 }
             }
         }
+
+        // SETTINGS BOTTOM SHEET
+        if (showSettingsSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showSettingsSheet = false },
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp)
+                        .navigationBarsPadding(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "⚙️ Settings",
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                        )
+                        TextButton(onClick = { showSettingsSheet = false }) {
+                            Text("Close")
+                        }
+                    }
+
+                    HorizontalDivider(color = Color(0xFFE2E8F0))
+
+                    // Dark Mode Toggle Row
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.DarkMode,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Text(
+                                text = "Dark Mode",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                            )
+                        }
+                        Switch(
+                            checked = isDarkMode,
+                            onCheckedChange = { ThemeState.setDarkMode(context, it) }
+                        )
+                    }
+
+                    // Notifications Setting Row
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Notifications,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Text(
+                                text = "Push Notifications",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                            )
+                        }
+                        Switch(
+                            checked = true,
+                            onCheckedChange = {}
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color(0xFFF8FAFC),
+                        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "Fixly App Version",
+                                style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF64748B), fontWeight = FontWeight.SemiBold)
+                            )
+                            Text(
+                                text = "v2.0.0 (Production Release)",
+                                style = MaterialTheme.typography.titleSmall.copy(color = Color(0xFF1E293B), fontWeight = FontWeight.Bold)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatItem(value: String, label: String) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF1E293B),
+                fontSize = 16.sp
+            )
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall.copy(
+                color = Color(0xFF64748B),
+                fontSize = 11.5.sp
+            )
+        )
+    }
+}
+
+@Composable
+private fun QuickLinkItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        color = Color.Transparent,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFFEFF6FF)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = Color(0xFF2563EB),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.sp,
+                        color = Color(0xFF1E293B)
+                    )
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = null,
+                tint = Color(0xFF94A3B8),
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
 }
 
 @Composable
@@ -401,16 +767,39 @@ private fun ProviderReviewsSection(
     onCategorySelected: (String) -> Unit,
     errorMessage: String?
 ) {
-    Card(Modifier.fillMaxWidth()) {
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
         Column(
-            Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Text(
-                "Service Reviews",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Service Reviews",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = Color(0xFF1E293B)
+                    )
+                )
+                Text(
+                    text = "${reviews.size} Reviews",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = Color(0xFF64748B),
+                        fontWeight = FontWeight.Medium
+                    )
+                )
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -419,6 +808,7 @@ private fun ProviderReviewsSection(
                     FilterChip(
                         selected = selectedCategory == category,
                         onClick = { onCategorySelected(category) },
+                        shape = RoundedCornerShape(12.dp),
                         label = {
                             val rating = serviceRatings[category]
                             Text(
@@ -430,23 +820,70 @@ private fun ProviderReviewsSection(
                     )
                 }
             }
+
             errorMessage?.let {
                 Text("Couldn't load reviews: $it", color = MaterialTheme.colorScheme.error)
             }
+
             val filteredReviews = when (selectedCategory) {
                 "All" -> reviews
                 "Other categories" -> reviews.filter { it.serviceCategory !in offeredCategories }
                 else -> reviews.filter { it.serviceCategory == selectedCategory }
             }
+
             if (filteredReviews.isEmpty()) {
-                Text(
-                    if (reviews.isEmpty()) "No customer reviews yet."
-                    else "No reviews for $selectedCategory.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                // Upgraded Empty State View matching mockup
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFFF8FAFC),
+                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 32.dp, horizontal = 20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFEFF6FF)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.ChatBubbleOutline,
+                                contentDescription = null,
+                                tint = Color(0xFF2563EB),
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Text(
+                            text = if (reviews.isEmpty()) "No customer reviews yet" else "No reviews for $selectedCategory",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF1E293B),
+                                fontSize = 16.sp
+                            ),
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Once you complete your service requests, reviews will appear here.",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = Color(0xFF64748B),
+                                fontSize = 13.sp
+                            ),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
             } else {
                 filteredReviews.forEach { review ->
-                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
                             "${review.serviceCategory} · ${review.rating}/5",
                             style = MaterialTheme.typography.titleSmall
@@ -456,7 +893,7 @@ private fun ProviderReviewsSection(
                         }
                     }
                 }
-}
             }
         }
+    }
 }

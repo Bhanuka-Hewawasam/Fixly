@@ -167,7 +167,10 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
             MyBookingsScreen(
                 onBack = { navController.popBackStack() },
                 onOpenJobBids = { jobId -> navController.navigate(Routes.jobBids(jobId)) },
-                onTrackProvider = { jobId -> navController.navigate(Routes.customerTracking(jobId)) }
+                onTrackProvider = { jobId -> navController.navigate(Routes.customerTracking(jobId)) },
+                onHome = { navController.navigate(Routes.HOME) { popUpTo(Routes.HOME) { inclusive = false } } },
+                onEmergency = { navController.navigate(Routes.EMERGENCY_SOS) },
+                onProfile = { activeRole -> navController.navigate(Routes.profile(activeRole)) }
             )
         }
 

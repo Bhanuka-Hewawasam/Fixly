@@ -12,7 +12,6 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -42,8 +41,8 @@ fun FixlyBottomNavBar(
 
     Surface(
         color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 3.dp,
-        shadowElevation = 8.dp,
+        tonalElevation = 4.dp,
+        shadowElevation = 12.dp,
         modifier = modifier
     ) {
         NavigationBar(
@@ -63,8 +62,10 @@ fun FixlyBottomNavBar(
                             contentDescription = item.title,
                             tint = if (item == BottomNavItem.Emergency && selected) {
                                 MaterialTheme.colorScheme.error
+                            } else if (selected) {
+                                MaterialTheme.colorScheme.primary
                             } else {
-                                LocalContentColor.current
+                                MaterialTheme.colorScheme.onSurfaceVariant
                             }
                         )
                     },
