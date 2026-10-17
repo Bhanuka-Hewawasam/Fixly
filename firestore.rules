@@ -9,6 +9,22 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid;
     }
 
+    function providerBidCustomerCanReadProfile(uid) {
+      let accessPath = /databases/$(database)/documents/providerProfileAccess/$(uid)/customers/$(request.auth.uid);
+      return signedIn()
+        && resource.data.roles is list
+        && resource.data.roles.hasAny(['provider'])
+        && exists(accessPath)
+        && get(accessPath).data.providerId == uid
+        && get(accessPath).data.customerId == request.auth.uid
+        && exists(/databases/$(database)/documents/jobPosts/$(get(accessPath).data.jobId))
+        && get(/databases/$(database)/documents/jobPosts/$(get(accessPath).data.jobId)).data.customerId
+          == request.auth.uid
+        && exists(/databases/$(database)/documents/jobPosts/$(get(accessPath).data.jobId)/bids/$(get(accessPath).data.bidId))
+        && get(/databases/$(database)/documents/jobPosts/$(get(accessPath).data.jobId)/bids/$(get(accessPath).data.bidId)).data.providerId
+          == uid;
+    }
+
     function isProvider(uid) {
       return signedIn()
         && exists(/databases/$(database)/documents/users/$(uid))
@@ -253,6 +269,36 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /providerProfileAccess/{providerId}/customers/{customerId} {
+      function validBidAccessGrant() {
+        let jobId = request.resource.data.jobId;
+        let bidId = request.resource.data.bidId;
+        let jobPath = /databases/$(database)/documents/jobPosts/$(jobId);
+        let bidPath = /databases/$(database)/documents/jobPosts/$(jobId)/bids/$(bidId);
+        return isOwner(providerId)
+          && request.resource.data.keys().hasOnly([
+            'providerId', 'customerId', 'jobId', 'bidId'
+          ])
+          && request.resource.data.providerId == providerId
+          && request.resource.data.customerId == customerId
+          && jobId is string
+          && bidId is string
+          && exists(jobPath)
+          && get(jobPath).data.customerId == customerId
+          && get(jobPath).data.status == 'Open'
+          && existsAfter(bidPath)
+          && getAfter(bidPath).data.providerId == providerId
+          && getAfter(bidPath).data.jobId == jobId;
+      }
+      allow read: if isOwner(providerId)
+        || (signedIn()
+          && request.auth.uid == customerId
+          && resource.data.providerId == providerId
+          && resource.data.customerId == customerId);
+      allow create, update: if validBidAccessGrant();
+      allow delete: if false;
+    }
+
     match /users/{uid} {
       allow create: if isOwner(uid)
         && request.resource.data.uid == uid
@@ -282,7 +328,7 @@ service cloud.firestore {
             && request.resource.data.serviceLongitude == null)
           || (isProvider(uid) && validServiceProfile(request.resource.data))
         );
-      allow read: if isOwner(uid);
+      allow read: if isOwner(uid) || providerBidCustomerCanReadProfile(uid);
       allow update: if (
           isOwner(uid)
           && request.resource.data.uid == resource.data.uid
@@ -530,7 +576,7 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/jobPosts/$(request.resource.data.jobId)).data.customerId
           == request.auth.uid
         && getAfter(/databases/$(database)/documents/jobPosts/$(request.resource.data.jobId)).data.status
-          == 'Assigned'
+          == 'Accepted'
         && getAfter(/databases/$(database)/documents/jobPosts/$(request.resource.data.jobId)).data.assignedProviderId
           == request.resource.data.providerId
         && getAfter(/databases/$(database)/documents/jobPosts/$(request.resource.data.jobId)).data.category
@@ -571,8 +617,11 @@ service cloud.firestore {
         let category = resource.data.category;
         let lockId = request.resource.data.bookingLockId;
         let lockPath = /databases/$(database)/documents/bookingLocks/$(lockId);
+        let bidPath = /databases/$(database)/documents/jobPosts/$(jobId)/bids/$(bidId);
+        let bid = get(bidPath).data;
+        let provider = get(/databases/$(database)/documents/users/$(providerId)).data;
         return resource.data.status == 'Open'
-          && request.resource.data.status == 'Assigned'
+          && request.resource.data.status == 'Accepted'
           && bidId is string
           && providerId is string
           && category is string
@@ -582,13 +631,24 @@ service cloud.firestore {
           && getAfter(lockPath).data.providerId == providerId
           && getAfter(lockPath).data.serviceCategory == category
           && getAfter(lockPath).data.jobId == jobId
-          && exists(/databases/$(database)/documents/jobPosts/$(jobId)/bids/$(bidId))
-          && get(/databases/$(database)/documents/jobPosts/$(jobId)/bids/$(bidId)).data.providerId
-            == providerId
+          && exists(bidPath)
+          && bid.providerId == providerId
+          && request.resource.data.providerPhone == provider.phoneNumber
+          && request.resource.data.providerPhone is string
+          && request.resource.data.providerPhone.size() > 0
+          && request.resource.data.providerPhone.size() <= 40
+          && request.resource.data.providerCertificateUrl == provider.get('certificateUrl', null)
+          && request.resource.data.acceptedBidPrice == bid.price
+          && request.resource.data.acceptedBidPrice is number
+          && request.resource.data.acceptedBidPrice > 0
+          && request.resource.data.acceptedProviderRating == bid.providerRating
+          && request.resource.data.acceptedProviderReviewCount == bid.providerReviewCount
           && request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly([
               'status', 'selectedBidId', 'assignedProviderId',
-              'assignedProviderName', 'bookingLockId'
+              'assignedProviderName', 'providerPhone', 'providerCertificateUrl',
+              'acceptedBidPrice', 'acceptedProviderRating',
+              'acceptedProviderReviewCount', 'bookingLockId'
             ]);
       }
       function validCustomerReview() {
@@ -619,7 +679,7 @@ service cloud.firestore {
         let changed = request.resource.data.diff(resource.data).affectedKeys();
         return resource.data.assignedProviderId == request.auth.uid
           && (
-            (resource.data.status == 'Assigned'
+            (resource.data.status in ['Accepted', 'Assigned']
               && request.resource.data.status == 'In Progress'
               && changed.hasOnly(['status']))
             || (resource.data.status == 'In Progress'
@@ -627,7 +687,7 @@ service cloud.firestore {
               && changed.hasOnly(['status'])
               && request.resource.data.afterPhotoUrl is string
               && request.resource.data.afterPhotoUrl.size() > 0)
-            || (resource.data.status in ['Assigned', 'In Progress']
+            || (resource.data.status in ['Accepted', 'Assigned', 'In Progress']
               && changed.hasOnly(['providerLocation', 'beforePhotoUrl', 'afterPhotoUrl']))
           );
       }

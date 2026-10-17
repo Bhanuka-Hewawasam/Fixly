@@ -84,6 +84,7 @@ class BookingReviewPolicyTest {
 
     @Test
     fun providerCanOnlyMoveAnAcceptedJobThroughAllowedStatuses() {
+        assertTrue(JobStatusPolicy.canProviderTransition("provider-1", "provider-1", "Accepted", "In Progress", false))
         assertTrue(JobStatusPolicy.canProviderTransition("provider-1", "provider-1", "Assigned", "In Progress", false))
         assertTrue(JobStatusPolicy.canProviderTransition("provider-1", "provider-1", "In Progress", "Completed", true))
         assertFalse(JobStatusPolicy.canProviderTransition("provider-2", "provider-1", "In Progress", "Completed", true))

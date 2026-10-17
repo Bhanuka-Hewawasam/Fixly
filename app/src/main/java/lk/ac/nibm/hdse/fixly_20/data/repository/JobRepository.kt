@@ -136,7 +136,7 @@ class JobRepository(
 
         val listener = firestore.collection("jobPosts")
             .whereEqualTo("assignedProviderId", providerId)
-            .whereIn("status", listOf("Assigned", "In Progress"))
+            .whereIn("status", listOf("Accepted", "Assigned", "In Progress"))
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     error.printStackTrace()

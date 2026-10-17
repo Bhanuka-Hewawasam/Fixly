@@ -10,6 +10,6 @@ object JobStatusPolicy {
     ): Boolean =
         authenticatedProviderId.isNotBlank() &&
             authenticatedProviderId == assignedProviderId &&
-            ((currentStatus == "Assigned" && nextStatus == "In Progress") ||
+            ((currentStatus in listOf("Accepted", "Assigned") && nextStatus == "In Progress") ||
                 (currentStatus == "In Progress" && nextStatus == "Completed" && hasAfterPhoto))
 }

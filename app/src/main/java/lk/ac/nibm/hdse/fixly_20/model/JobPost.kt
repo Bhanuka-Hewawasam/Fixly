@@ -21,10 +21,15 @@ data class JobPost(
 
     val location: GeoPoint? = null,
     val address: String = "",
-    val status: String = "Open",            // Open -> Assigned -> In Progress -> Completed
+    val status: String = "Open",            // Open -> Accepted -> In Progress -> Completed
     val selectedBidId: String? = null,
     val assignedProviderId: String? = null,
     val assignedProviderName: String? = null,
+    val providerPhone: String? = null,
+    val providerCertificateUrl: String? = null,
+    val acceptedBidPrice: Double? = null,
+    val acceptedProviderRating: Double? = null,
+    val acceptedProviderReviewCount: Int? = null,
     val bookingLockId: String? = null,
     val emergencyAlertId: String? = null,
     val providerLocation: GeoPoint? = null,

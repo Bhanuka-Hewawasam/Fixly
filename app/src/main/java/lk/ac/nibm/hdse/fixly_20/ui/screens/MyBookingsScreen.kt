@@ -1,5 +1,7 @@
 package lk.ac.nibm.hdse.fixly_20.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -7,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import lk.ac.nibm.hdse.fixly_20.model.JobPost
@@ -66,6 +69,8 @@ private fun BookingCard(
     onViewBids: () -> Unit,
     onTrack: () -> Unit
 ) {
+    val context = LocalContext.current
+
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -83,13 +88,56 @@ private fun BookingCard(
             Text(job.description, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
             Spacer(modifier = Modifier.height(12.dp))
 
+            if (!job.isEmergency && job.assignedProviderId != null &&
+                job.status in listOf("Accepted", "In Progress", "Completed")
+            ) {
+                Text(
+                    job.assignedProviderName ?: "Provider",
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Text(
+                    if ((job.acceptedProviderReviewCount ?: 0) > 0) {
+                        "Rating: ${"%.1f".format(job.acceptedProviderRating ?: 0.0)} " +
+                            "(${job.acceptedProviderReviewCount} reviews)"
+                    } else {
+                        "No reviews yet"
+                    },
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                job.acceptedBidPrice?.let {
+                    Text("Accepted price: Rs. ${"%.2f".format(it)}", style = MaterialTheme.typography.bodyMedium)
+                }
+                job.providerCertificateUrl?.takeIf { it.isNotBlank() }?.let { certificateUrl ->
+                    OutlinedButton(
+                        onClick = {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(certificateUrl)))
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("View Provider Certificate")
+                    }
+                }
+                job.providerPhone?.takeIf { it.isNotBlank() }?.let { phone ->
+                    Button(
+                        onClick = {
+                            context.startActivity(
+                                Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", phone, null))
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Call Provider")
+                    }
+                }
+            }
+
             when (job.status) {
                 "Open" -> {
                     Button(onClick = onViewBids, modifier = Modifier.fillMaxWidth()) {
                         Text("View Bids")
                     }
                 }
-                "Assigned", "In Progress" -> {
+                "Accepted", "Assigned", "In Progress" -> {
                     Button(onClick = onTrack, modifier = Modifier.fillMaxWidth()) {
                         Text("Track Provider")
                     }

@@ -83,7 +83,21 @@ class BidRepository(
                 providerRating = categoryRating?.averageRating ?: 0.0,
                 providerReviewCount = categoryRating?.reviewCount ?: 0
             )
-            bidRef.set(bid).await()
+            val bidBatch = firestore.batch()
+            bidBatch.set(bidRef, bid)
+            bidBatch.set(
+                firestore.collection("providerProfileAccess")
+                    .document(providerId)
+                    .collection("customers")
+                    .document(job.customerId),
+                mapOf(
+                    "providerId" to providerId,
+                    "customerId" to job.customerId,
+                    "jobId" to jobId,
+                    "bidId" to bidRef.id
+                )
+            )
+            bidBatch.commit().await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -111,10 +125,15 @@ class BidRepository(
                 val bidSnapshot = transaction.get(bidRef)
                 val bid = bidSnapshot.toObject(Bid::class.java)
                     ?: throw IllegalStateException("Bid not found")
+                val providerRef = firestore.collection("users").document(bid.providerId)
+                val providerSnapshot = transaction.get(providerRef)
                 val jobCustomerId = jobSnapshot.getString("customerId")
                     ?: throw IllegalStateException("Job has no customer")
                 val category = jobSnapshot.getString("category")
                     ?: throw IllegalStateException("Job has no service category")
+                val providerPhone = providerSnapshot.getString("phoneNumber")
+                    ?.takeIf { it.isNotBlank() }
+                    ?: throw IllegalStateException("Provider has no phone number on their profile.")
                 if (jobCustomerId != customerId) {
                     throw IllegalStateException("You can only select a bid for your own job.")
                 }
@@ -143,8 +162,13 @@ class BidRepository(
                         "selectedBidId" to bidId,
                         "assignedProviderId" to bid.providerId,
                         "assignedProviderName" to bid.providerName,
+                        "providerPhone" to providerPhone,
+                        "providerCertificateUrl" to providerSnapshot.getString("certificateUrl"),
+                        "acceptedBidPrice" to bid.price,
+                        "acceptedProviderRating" to bid.providerRating,
+                        "acceptedProviderReviewCount" to bid.providerReviewCount,
                         "bookingLockId" to lockId,
-                        "status" to "Assigned"
+                        "status" to "Accepted"
                     )
                 )
                 transaction.set(

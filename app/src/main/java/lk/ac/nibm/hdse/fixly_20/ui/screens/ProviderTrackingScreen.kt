@@ -126,7 +126,7 @@ fun ProviderTrackingScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            if (job.status == "Assigned") {
+            if (job.status == "Accepted" || job.status == "Assigned") {
                 Button(onClick = { viewModel.markInProgress() }, modifier = Modifier.fillMaxWidth()) {
                     Text("Mark as In Progress")
                 }
