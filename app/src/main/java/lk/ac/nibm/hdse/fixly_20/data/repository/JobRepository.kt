@@ -68,6 +68,7 @@ class JobRepository(
     }
 
     fun observeOpenJobs(providerCategories: List<String>): Flow<List<JobPost>> = callbackFlow {
+        val currentUid = firebaseAuth.currentUser?.uid
         var query: Query = firestore.collection("jobPosts").whereEqualTo("status", "Open")
         if (providerCategories.isNotEmpty() && providerCategories.size <= 10) {
             query = query.whereIn("category", providerCategories)
@@ -80,7 +81,8 @@ class JobRepository(
                     return@addSnapshotListener
                 }
                 val jobs = snapshot?.toObjects(JobPost::class.java) ?: emptyList()
-                val sortedJobs = jobs.sortedWith(
+                val filteredJobs = jobs.filter { it.customerId != currentUid }
+                val sortedJobs = filteredJobs.sortedWith(
                     compareByDescending<JobPost> { it.isEmergency }
                         .thenByDescending { it.createdAt }
                 )
@@ -159,6 +161,18 @@ class JobRepository(
         }
     }
 
+    suspend fun uploadEvidencePhoto(context: Context, jobId: String, type: String, imageUri: Uri): Result<String> {
+        return try {
+            val uploadResult = CloudinaryUploader.uploadFile(context, imageUri)
+            val url = uploadResult.getOrNull() ?: return Result.failure(IllegalStateException("Upload failed"))
+            val field = if (type == "before") "beforePhotoUrl" else "afterPhotoUrl"
+            firestore.collection("jobPosts").document(jobId).update(field, url).await()
+            Result.success(url)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun updateJobStatus(jobId: String, status: String): Result<Unit> {
         return try {
             val providerId = firebaseAuth.currentUser?.uid
@@ -166,6 +180,10 @@ class JobRepository(
             val jobRef = firestore.collection("jobPosts").document(jobId)
             firestore.runTransaction { transaction ->
                 val snapshot = transaction.get(jobRef)
+                val jobCustomerId = snapshot.getString("customerId")
+                if (jobCustomerId == providerId) {
+                    throw IllegalStateException("You cannot update a job where you are both customer and provider.")
+                }
                 if (snapshot.getString("assignedProviderId") != providerId) {
                     throw IllegalStateException("You can update only jobs assigned to you.")
                 }
@@ -178,32 +196,10 @@ class JobRepository(
                     hasAfterPhoto = !snapshot.getString("afterPhotoUrl").isNullOrBlank()
                 )
                 if (!allowed) {
-                    throw IllegalStateException("This job cannot be moved from $currentStatus to $status.")
+                    throw IllegalStateException("Invalid status transition from $currentStatus to $status")
                 }
                 transaction.update(jobRef, "status", status)
             }.await()
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    /**
-     * Uploads a work-evidence photo to Cloudinary, then saves the returned URL on the job
-     * document. type is "before" or "after".
-     */
-    suspend fun uploadEvidencePhoto(
-        context: Context,
-        jobId: String,
-        type: String,
-        photoUri: Uri
-    ): Result<Unit> {
-        return try {
-            val url = CloudinaryUploader.uploadFile(context, photoUri).getOrThrow()
-            val field = if (type == "before") "beforePhotoUrl" else "afterPhotoUrl"
-
-            firestore.collection("jobPosts").document(jobId)
-                .update(field, url).await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

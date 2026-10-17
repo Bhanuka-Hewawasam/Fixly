@@ -34,6 +34,9 @@ class JobCompletionRepository(
                 ?: throw IllegalStateException("Sign in to submit a review.")
             val providerId = job.assignedProviderId
                 ?: return Result.failure(IllegalStateException("No provider is assigned to this job"))
+            if (customerId == providerId) {
+                return Result.failure(IllegalStateException("You cannot review or complete your own job."))
+            }
 
             val jobRef = firestore.collection("jobPosts").document(job.jobId)
             val ratingAggregateRef = firestore.collection("providerRatingAggregates").document(providerId)
@@ -46,6 +49,11 @@ class JobCompletionRepository(
                 val ratingAggregateSnapshot = transaction.get(ratingAggregateRef)
                 val reviewSnapshot = transaction.get(reviewRef)
                 val lockSnapshot = transaction.get(bookingLockRef)
+                val jobCustomerId = jobSnapshot.getString("customerId")
+                val assignedProviderId = jobSnapshot.getString("assignedProviderId")
+                if (jobCustomerId == assignedProviderId || customerId == assignedProviderId) {
+                    throw IllegalStateException("You cannot review or complete your own job.")
+                }
                 if (jobSnapshot.getString("assignedProviderId") != providerId) {
                     throw IllegalStateException("The assigned provider for this job has changed.")
                 }

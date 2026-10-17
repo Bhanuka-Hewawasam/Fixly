@@ -33,6 +33,13 @@ class BidRepository(
             val providerId = firebaseAuth.currentUser?.uid
                 ?: return Result.failure(IllegalStateException("No logged-in user"))
 
+            val job = firestore.collection("jobPosts").document(jobId).get().await()
+                .toObject(JobPost::class.java)
+                ?: return Result.failure(IllegalStateException("Job not found"))
+            if (job.customerId == providerId) {
+                return Result.failure(IllegalStateException("You can't bid on your own job."))
+            }
+
             val userRef = firestore.collection("users").document(providerId)
             val aggregateRef = firestore.collection("providerRatingAggregates").document(providerId)
             firestore.runTransaction { transaction ->
@@ -63,9 +70,6 @@ class BidRepository(
             }.await()
             val providerRatings = aggregateRef.get().await()
                 .toObject(ProviderRatingAggregate::class.java)
-            val job = firestore.collection("jobPosts").document(jobId).get().await()
-                .toObject(JobPost::class.java)
-                ?: return Result.failure(IllegalStateException("Job not found"))
             val categoryRating = providerRatings?.serviceRatings?.get(job.category)
 
             val bidRef = firestore.collection("jobPosts").document(jobId).collection("bids").document()
@@ -113,6 +117,9 @@ class BidRepository(
                     ?: throw IllegalStateException("Job has no service category")
                 if (jobCustomerId != customerId) {
                     throw IllegalStateException("You can only select a bid for your own job.")
+                }
+                if (bid.providerId == customerId) {
+                    throw IllegalStateException("You cannot accept your own bid.")
                 }
                 val lockId = ServiceRatingPolicy.bookingLockId(customerId, bid.providerId, category)
                 val lockRef = firestore.collection("bookingLocks").document(lockId)

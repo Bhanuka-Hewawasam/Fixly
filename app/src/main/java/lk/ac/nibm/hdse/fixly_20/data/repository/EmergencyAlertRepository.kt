@@ -67,6 +67,11 @@ class EmergencyAlertRepository(
         selectedProviderId: String,
         distanceKm: Double
     ): Result<String> {
+        val customerId = firebaseAuth.currentUser?.uid
+            ?: return Result.failure(IllegalStateException("Please sign in to send an emergency request"))
+        if (selectedProviderId == customerId) {
+            return Result.failure(IllegalStateException("You cannot request help from yourself."))
+        }
         if (selectedProviderId.isBlank() || !distanceKm.isFinite() || distanceKm < 0) {
             return Result.failure(IllegalArgumentException("Select a valid nearby provider"))
         }
@@ -359,6 +364,10 @@ class EmergencyAlertRepository(
                 val serviceArea = transaction.get(serviceAreaRef)
                 val existingJob = transaction.get(jobRef)
                 val status = snapshot.getString("status") ?: "ACTIVE"
+                val customerId = snapshot.getString("customerId")
+                if (customerId == providerId) {
+                    throw IllegalStateException("You cannot accept your own emergency request.")
+                }
 
                 if (status == "ACCEPTED" &&
                     snapshot.getString("acceptedProviderId") == providerId &&
