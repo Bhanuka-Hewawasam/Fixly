@@ -5,6 +5,8 @@ import android.annotation.SuppressLint
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.pm.PackageManager
+import android.location.Geocoder
+import android.location.Location
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -27,10 +29,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import com.google.firebase.firestore.GeoPoint
+import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.rememberCameraPositionState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import lk.ac.nibm.hdse.fixly_20.ui.components.CategoryCard
 import lk.ac.nibm.hdse.fixly_20.ui.components.FixlyPrimaryButton
 import lk.ac.nibm.hdse.fixly_20.ui.components.FixlySecondaryButton
@@ -38,12 +51,14 @@ import lk.ac.nibm.hdse.fixly_20.ui.components.FixlyTextField
 import lk.ac.nibm.hdse.fixly_20.ui.theme.FixlyEmergency
 import lk.ac.nibm.hdse.fixly_20.ui.theme.FixlyEmergencyContainer
 import lk.ac.nibm.hdse.fixly_20.viewmodel.PostJobViewModel
+import java.io.IOException
 import java.util.Calendar
 import java.util.Locale
 
 import lk.ac.nibm.hdse.fixly_20.util.ServiceCategories
 
 private val categories = ServiceCategories.canonicalList
+private val sriLankaMapCenter = LatLng(7.8731, 80.7718)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("MissingPermission")
@@ -55,6 +70,7 @@ fun PostJobScreen(
 ) {
     val context = LocalContext.current
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+    val locationScope = rememberCoroutineScope()
 
     var selectedCategory by remember { mutableStateOf("Plumbing") }
     var description by remember { mutableStateOf("") }
@@ -63,6 +79,7 @@ fun PostJobScreen(
     var isEmergency by remember { mutableStateOf(false) }
     var address by remember { mutableStateOf("") }
     var selectedImages by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var showLocationPicker by remember { mutableStateOf(false) }
 
     val uiState by viewModel.uiState.collectAsState()
 
@@ -99,18 +116,38 @@ fun PostJobScreen(
         false
     )
 
+    fun captureLocation(location: Location?) {
+        if (location == null) {
+            viewModel.setFetchingLocation(false)
+            return
+        }
+        val point = GeoPoint(location.latitude, location.longitude)
+        val fallbackAddress = formatLocationCoordinates(point)
+        address = fallbackAddress
+        viewModel.setLocation(point, fallbackAddress)
+        locationScope.launch {
+            val resolvedAddress = reverseGeocode(context, point)
+            if (viewModel.uiState.value.capturedLocation == point) {
+                address = resolvedAddress
+                viewModel.setLocation(point, resolvedAddress)
+            }
+        }
+    }
+
+    fun fetchLastLocation() {
+        viewModel.setFetchingLocation(true)
+        fusedLocationClient.lastLocation
+            .addOnSuccessListener(::captureLocation)
+            .addOnFailureListener { viewModel.setFetchingLocation(false) }
+    }
+
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
-            viewModel.setFetchingLocation(true)
-            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-                if (location != null) {
-                    viewModel.setLocation(GeoPoint(location.latitude, location.longitude))
-                } else {
-                    viewModel.setFetchingLocation(false)
-                }
-            }
+            fetchLastLocation()
+        } else {
+            viewModel.setFetchingLocation(false)
         }
     }
 
@@ -120,14 +157,7 @@ fun PostJobScreen(
         ) == PackageManager.PERMISSION_GRANTED
 
         if (hasPermission) {
-            viewModel.setFetchingLocation(true)
-            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-                if (location != null) {
-                    viewModel.setLocation(GeoPoint(location.latitude, location.longitude))
-                } else {
-                    viewModel.setFetchingLocation(false)
-                }
-            }
+            fetchLastLocation()
         } else {
             locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         }
@@ -169,7 +199,7 @@ fun PostJobScreen(
                                 preferredDate,
                                 preferredTime,
                                 isEmergency,
-                                address,
+                                address.ifBlank { uiState.locationAddress.orEmpty() },
                                 selectedImages
                             )
                         }
@@ -286,46 +316,44 @@ fun PostJobScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            OutlinedButton(
-                onClick = { requestLocation() },
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(
-                    1.dp,
-                    if (uiState.capturedLocation != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-                ),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = if (uiState.capturedLocation != null) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else MaterialTheme.colorScheme.surface
-                ),
-                modifier = Modifier.fillMaxWidth()
+            uiState.capturedLocation?.let { selectedLocation ->
+                Text(
+                    text = "Selected location: ${uiState.locationAddress ?: formatLocationCoordinates(selectedLocation)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.padding(vertical = 4.dp)
+                OutlinedButton(
+                    onClick = { requestLocation() },
+                    enabled = !uiState.isFetchingLocation,
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                    modifier = Modifier.weight(1f)
                 ) {
-                    when {
-                        uiState.isFetchingLocation -> {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Detecting GPS position...")
-                        }
-                        uiState.capturedLocation != null -> {
-                            Icon(Icons.Default.GpsFixed, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                "GPS Captured (${String.format(Locale.US, "%.4f, %.4f", uiState.capturedLocation?.latitude, uiState.capturedLocation?.longitude)}) ✓",
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            )
-                        }
-                        else -> {
-                            Icon(Icons.Default.MyLocation, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Use Current GPS Location")
-                        }
+                    if (uiState.isFetchingLocation) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Getting location…")
+                    } else {
+                        Icon(Icons.Default.MyLocation, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Use current location")
                     }
+                }
+                OutlinedButton(
+                    onClick = { showLocationPicker = true },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Default.Map, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Choose on map")
                 }
             }
 
@@ -391,7 +419,214 @@ fun PostJobScreen(
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
+
+    if (showLocationPicker) {
+        JobLocationPickerDialog(
+            initialLocation = uiState.capturedLocation,
+            onDismiss = { showLocationPicker = false },
+            onConfirm = { point, selectedAddress ->
+                address = selectedAddress
+                viewModel.setLocation(point, selectedAddress)
+                showLocationPicker = false
+            }
+        )
+    }
 }
+
+@SuppressLint("MissingPermission")
+@Composable
+private fun JobLocationPickerDialog(
+    initialLocation: GeoPoint?,
+    onDismiss: () -> Unit,
+    onConfirm: (GeoPoint, String) -> Unit
+) {
+    val context = LocalContext.current
+    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+    val cameraPositionState = rememberCameraPositionState {
+        val initialPoint = initialLocation?.let { LatLng(it.latitude, it.longitude) } ?: sriLankaMapCenter
+        position = CameraPosition.fromLatLngZoom(initialPoint, if (initialLocation == null) 7f else 15f)
+    }
+    val scope = rememberCoroutineScope()
+    var selectedPoint by remember {
+        mutableStateOf(initialLocation?.let { LatLng(it.latitude, it.longitude) } ?: sriLankaMapCenter)
+    }
+    var selectedAddress by remember {
+        mutableStateOf(
+            initialLocation?.let(::formatLocationCoordinates)
+                ?: formatLocationCoordinates(GeoPoint(sriLankaMapCenter.latitude, sriLankaMapCenter.longitude))
+        )
+    }
+    var isResolvingAddress by remember { mutableStateOf(false) }
+    var locationMessage by remember { mutableStateOf<String?>(null) }
+    var moveToDeviceLocation by remember { mutableStateOf(false) }
+
+    fun animateToLocation(location: Location?) {
+        if (location == null) {
+            locationMessage = "Couldn't get your location. You can still choose a point on the map."
+            return
+        }
+        locationMessage = null
+        val point = LatLng(location.latitude, location.longitude)
+        scope.launch {
+            cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(point, 15f))
+        }
+    }
+
+    fun getDeviceLocation() {
+        fusedLocationClient.lastLocation
+            .addOnSuccessListener { location ->
+                if (location != null) {
+                    animateToLocation(location)
+                } else {
+                    fusedLocationClient.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, null)
+                        .addOnSuccessListener(::animateToLocation)
+                        .addOnFailureListener {
+                            locationMessage = "Couldn't get your location. You can still choose a point on the map."
+                        }
+                }
+            }
+            .addOnFailureListener {
+                locationMessage = "Couldn't get your location. You can still choose a point on the map."
+            }
+    }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            moveToDeviceLocation = true
+        } else {
+            locationMessage = "Location permission denied. You can still choose a point on the map."
+        }
+    }
+
+    LaunchedEffect(initialLocation) {
+        if (initialLocation == null &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                animateToLocation(location)
+            }
+        }
+    }
+
+    LaunchedEffect(moveToDeviceLocation) {
+        if (moveToDeviceLocation) {
+            moveToDeviceLocation = false
+            getDeviceLocation()
+        }
+    }
+
+    LaunchedEffect(cameraPositionState.isMoving) {
+        if (!cameraPositionState.isMoving) {
+            selectedPoint = cameraPositionState.position.target
+            val point = GeoPoint(selectedPoint.latitude, selectedPoint.longitude)
+            selectedAddress = formatLocationCoordinates(point)
+            isResolvingAddress = true
+            selectedAddress = reverseGeocode(context, point)
+            isResolvingAddress = false
+        }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close map")
+                    }
+                    Text(
+                        "Choose job location",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                    )
+                }
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    GoogleMap(
+                        modifier = Modifier.fillMaxSize(),
+                        cameraPositionState = cameraPositionState
+                    )
+                    Icon(
+                        imageVector = Icons.Default.LocationOn,
+                        contentDescription = "Map selection pin",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.align(Alignment.Center).offset(y = (-20).dp).size(42.dp)
+                    )
+                    SmallFloatingActionButton(
+                        onClick = {
+                            if (ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.ACCESS_FINE_LOCATION
+                                ) == PackageManager.PERMISSION_GRANTED
+                            ) {
+                                getDeviceLocation()
+                            } else {
+                                locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                            }
+                        },
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+                    ) {
+                        Icon(Icons.Default.MyLocation, contentDescription = "Move to my location")
+                    }
+                }
+                Text(
+                    text = if (isResolvingAddress) "Finding address…" else selectedAddress,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                locationMessage?.let {
+                    Text(
+                        text = it,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+                Button(
+                    onClick = {
+                        onConfirm(
+                            GeoPoint(selectedPoint.latitude, selectedPoint.longitude),
+                            selectedAddress.ifBlank {
+                                formatLocationCoordinates(GeoPoint(selectedPoint.latitude, selectedPoint.longitude))
+                            }
+                        )
+                    },
+                    enabled = !isResolvingAddress,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    Text("Confirm location")
+                }
+            }
+        }
+    }
+}
+
+private fun formatLocationCoordinates(point: GeoPoint): String =
+    String.format(Locale.US, "%.5f, %.5f", point.latitude, point.longitude)
+
+private suspend fun reverseGeocode(context: android.content.Context, point: GeoPoint): String =
+    withContext(Dispatchers.IO) {
+        val fallback = formatLocationCoordinates(point)
+        if (!Geocoder.isPresent()) return@withContext fallback
+        try {
+            Geocoder(context, Locale.getDefault())
+                .getFromLocation(point.latitude, point.longitude, 1)
+                ?.firstOrNull()
+                ?.getAddressLine(0)
+                ?.takeIf { it.isNotBlank() }
+                ?: fallback
+        } catch (_: IOException) {
+            fallback
+        } catch (_: IllegalArgumentException) {
+            fallback
+        }
+    }
 
 @Composable
 private fun FormSectionHeader(number: String, title: String) {
