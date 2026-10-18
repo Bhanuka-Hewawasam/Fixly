@@ -47,6 +47,23 @@ class UserRepository(
         Result.failure(error)
     }
 
+    suspend fun uploadCertificate(context: Context, imageUri: Uri): Result<String> {
+        return try {
+            val uid = firebaseAuth.currentUser?.uid
+                ?: return Result.failure(IllegalStateException("No logged-in user"))
+
+            val uploadResult = CloudinaryUploader.uploadFile(context, imageUri)
+            val certificateUrl = uploadResult.getOrThrow()
+
+            firestore.collection("users").document(uid)
+                .update("certificateUrl", certificateUrl).await()
+
+            Result.success(certificateUrl)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun saveProviderServiceProfile(
         serviceAddress: String,
         serviceCity: String,

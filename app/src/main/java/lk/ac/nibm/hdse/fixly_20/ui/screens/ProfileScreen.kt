@@ -2,8 +2,10 @@ package lk.ac.nibm.hdse.fixly_20.ui.screens
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.LocationManager
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -104,6 +106,14 @@ fun ProfileScreen(
     var isGettingLocation by remember { mutableStateOf(false) }
     var locationError by remember { mutableStateOf<String?>(null) }
 
+    val certificatePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.uploadCertificate(context, uri)
+        }
+    }
+
     LaunchedEffect(uiState.user) {
         uiState.user?.let { user ->
             if (!isEditingProfile) {
@@ -115,7 +125,7 @@ fun ProfileScreen(
             latitude = user.serviceLatitude?.toString().orEmpty()
             longitude = user.serviceLongitude?.toString().orEmpty()
             selectedRadius = user.serviceRadiusKm.coerceIn(1, 100).toFloat()
-            selectedCategories = user.serviceCategories.toSet()
+            selectedCategories = user.serviceCategories.map { ServiceCategories.normalize(it) }.toSet()
             availableForEmergency = user.availableForEmergency
         }
     }
@@ -443,7 +453,7 @@ fun ProfileScreen(
                     }
                 }
 
-                if (activeRole == "provider") {
+                if (activeRole == "provider" && uiState.user?.roles?.contains("provider") == true) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(24.dp),
@@ -455,12 +465,38 @@ fun ProfileScreen(
                             modifier = Modifier.padding(20.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            Text("Service Location", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            Text("Service Location & Profile", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                             Text(
-                                "This is the provider’s registered service area, not their live current location.",
+                                "This is the provider’s registered service area and certificate details.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+
+                            Text("Certificate", fontWeight = FontWeight.SemiBold)
+                            if (!uiState.user?.certificateUrl.isNullOrBlank()) {
+                                OutlinedButton(
+                                    onClick = {
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uiState.user?.certificateUrl)))
+                                    },
+                                    shape = RoundedCornerShape(14.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("View Uploaded Certificate")
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                            }
+                            OutlinedButton(
+                                onClick = { certificatePicker.launch("image/*") },
+                                enabled = !uiState.isUploadingCertificate,
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                if (uiState.isUploadingCertificate) {
+                                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                } else {
+                                    Text(if (uiState.user?.certificateUrl.isNullOrBlank()) "Upload Certificate" else "Re-upload Certificate")
+                                }
+                            }
                             OutlinedTextField(
                                 value = address,
                                 onValueChange = { address = it },

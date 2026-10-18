@@ -1,5 +1,7 @@
 package lk.ac.nibm.hdse.fixly_20.viewmodel
 
+import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -8,11 +10,13 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import lk.ac.nibm.hdse.fixly_20.data.repository.UserRepository
 import lk.ac.nibm.hdse.fixly_20.model.User
+import lk.ac.nibm.hdse.fixly_20.util.ServiceCategories
 
 data class ProviderAvailabilityUiState(
     val isLoading: Boolean = true,
     val isUpdating: Boolean = false,
     val isUpdatingProfile: Boolean = false,
+    val isUploadingCertificate: Boolean = false,
     val errorMessage: String? = null,
     val successMessage: String? = null,
     val saved: Boolean = false,
@@ -96,6 +100,43 @@ class ProviderAvailabilityViewModel(
         }
     }
 
+    fun uploadCertificate(context: Context, uri: Uri) {
+        if (_uiState.value.isUploadingCertificate) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isUploadingCertificate = true, errorMessage = null, successMessage = null) }
+            userRepository.uploadCertificate(context, uri)
+                .onSuccess {
+                    userRepository.getCurrentUserProfile()
+                        .onSuccess { user ->
+                            _uiState.update {
+                                it.copy(
+                                    user = user,
+                                    isUploadingCertificate = false,
+                                    successMessage = "Certificate uploaded successfully.",
+                                    errorMessage = null
+                                )
+                            }
+                        }
+                        .onFailure {
+                            _uiState.update {
+                                it.copy(
+                                    isUploadingCertificate = false,
+                                    successMessage = "Certificate uploaded successfully."
+                                )
+                            }
+                        }
+                }
+                .onFailure { error ->
+                    _uiState.update {
+                        it.copy(
+                            isUploadingCertificate = false,
+                            errorMessage = error.localizedMessage ?: "Failed to upload certificate."
+                        )
+                    }
+                }
+        }
+    }
+
     fun saveServiceProfile(
         serviceAddress: String,
         serviceCity: String,
@@ -106,6 +147,10 @@ class ProviderAvailabilityViewModel(
         availableForEmergency: Boolean
     ) {
         if (_uiState.value.isUpdating) return
+        if (serviceCategories.isEmpty()) {
+            _uiState.update { it.copy(errorMessage = "Choose at least one service category.") }
+            return
+        }
         val parsedLatitude = latitude.toDoubleOrNull()
         val parsedLongitude = longitude.toDoubleOrNull()
         if (parsedLatitude == null || parsedLongitude == null) {
@@ -122,7 +167,7 @@ class ProviderAvailabilityViewModel(
                 serviceLatitude = parsedLatitude,
                 serviceLongitude = parsedLongitude,
                 serviceRadiusKm = serviceRadiusKm,
-                serviceCategories = serviceCategories,
+                serviceCategories = serviceCategories.map { ServiceCategories.normalize(it) },
                 availableForEmergency = availableForEmergency
             ).onSuccess {
                 userRepository.getCurrentUserProfile()
