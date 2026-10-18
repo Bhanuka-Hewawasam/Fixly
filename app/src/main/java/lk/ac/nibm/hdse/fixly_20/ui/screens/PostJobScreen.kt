@@ -41,7 +41,9 @@ import lk.ac.nibm.hdse.fixly_20.viewmodel.PostJobViewModel
 import java.util.Calendar
 import java.util.Locale
 
-private val categories = listOf("Plumbing", "Electrical", "Cleaning", "Carpentry", "Painting", "AC Repair", "Gardening", "Other")
+import lk.ac.nibm.hdse.fixly_20.util.ServiceCategories
+
+private val categories = ServiceCategories.canonicalList
 
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("MissingPermission")

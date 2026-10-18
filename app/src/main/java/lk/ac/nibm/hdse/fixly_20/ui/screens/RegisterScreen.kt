@@ -46,14 +46,9 @@ import lk.ac.nibm.hdse.fixly_20.ui.components.RoleSelectionCard
 import lk.ac.nibm.hdse.fixly_20.ui.components.getCategoryVectorIcon
 import lk.ac.nibm.hdse.fixly_20.viewmodel.AuthViewModel
 
-private val serviceCategoryOptions = listOf(
-    "Vehicle Mechanic",
-    "Electrician",
-    "Plumber",
-    "AC Technician",
-    "Computer Technician",
-    "Other"
-)
+import lk.ac.nibm.hdse.fixly_20.util.ServiceCategories
+
+private val serviceCategoryOptions = ServiceCategories.canonicalList
 
 @Composable
 fun RegisterScreen(

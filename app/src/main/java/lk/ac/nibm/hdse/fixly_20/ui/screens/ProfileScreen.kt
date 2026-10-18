@@ -53,14 +53,9 @@ import lk.ac.nibm.hdse.fixly_20.viewmodel.ProviderAvailabilityViewModel
 import java.util.Locale
 import kotlinx.coroutines.flow.flowOf
 
-private val providerServiceCategories = listOf(
-    "Vehicle Mechanic",
-    "Electrician",
-    "Plumber",
-    "AC Technician",
-    "Computer Technician",
-    "Other"
-)
+import lk.ac.nibm.hdse.fixly_20.util.ServiceCategories
+
+private val providerServiceCategories = ServiceCategories.canonicalList
 
 private val sriLankaMapCenter = LatLng(7.8731, 80.7718)
 
