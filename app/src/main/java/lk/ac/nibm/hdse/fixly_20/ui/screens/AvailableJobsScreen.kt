@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -18,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Send
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,14 +28,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.SubcomposeAsyncImage
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.firebase.firestore.GeoPoint
@@ -59,6 +65,7 @@ fun AvailableJobsScreen(
 
     val uiState by viewModel.uiState.collectAsState()
     var selectedJob by remember { mutableStateOf<JobPost?>(null) }
+    var previewImageUrl by remember { mutableStateOf<String?>(null) }
     var isLocating by remember { mutableStateOf(false) }
     var locationFailed by remember { mutableStateOf(false) }
 
@@ -309,7 +316,8 @@ fun AvailableJobsScreen(
                                     timeConflict = viewModel.timeConflictFor(item.job),
                                     isCheckingAvailability = uiState.isLoadingActiveProviderJobs ||
                                         uiState.activeProviderJobsError != null,
-                                    onPlaceBid = { selectedJob = item.job }
+                                    onPlaceBid = { selectedJob = item.job },
+                                    onImageClick = { previewImageUrl = it }
                                 )
                             }
                         }
@@ -331,8 +339,51 @@ fun AvailableJobsScreen(
             onDismiss = { if (!uiState.isSubmittingBid) selectedJob = null },
             onSubmit = { price, message, etaMinutes ->
                 viewModel.submitBid(job.jobId, price, message, etaMinutes)
-            }
+            },
+            onImageClick = { previewImageUrl = it }
         )
+    }
+
+    previewImageUrl?.let { url ->
+        Dialog(
+            onDismissRequest = { previewImageUrl = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = Color.Black
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    SubcomposeAsyncImage(
+                        model = url,
+                        contentDescription = "Full screen preview",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable { previewImageUrl = null },
+                        loading = {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(color = Color.White)
+                            }
+                        },
+                        error = {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("Failed to load image", color = Color.White)
+                            }
+                        }
+                    )
+                    IconButton(
+                        onClick = { previewImageUrl = null },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(16.dp)
+                            .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Close preview", tint = Color.White)
+                    }
+                }
+            }
+        }
     }
 
 }
@@ -343,7 +394,8 @@ private fun JobCard(
     distanceKm: Double,
     timeConflict: JobPost?,
     isCheckingAvailability: Boolean,
-    onPlaceBid: () -> Unit
+    onPlaceBid: () -> Unit,
+    onImageClick: (String) -> Unit
 ) {
     val distanceText = String.format(java.util.Locale.getDefault(), "%.1f", distanceKm)
     val categoryIcon = getCategoryVectorIcon(job.category)
@@ -435,6 +487,48 @@ private fun JobCard(
                                 fontSize = 11.5.sp
                             )
                         )
+                    }
+                }
+            }
+
+            // Job Image Thumbnail (if any)
+            job.imageUrls.firstOrNull()?.takeIf { it.isNotBlank() }?.let { imageUrl ->
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable { onImageClick(imageUrl) }
+                ) {
+                    SubcomposeAsyncImage(
+                        model = imageUrl,
+                        contentDescription = "Job image thumbnail",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                        loading = {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            }
+                        },
+                        error = {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Icon(Icons.Outlined.BrokenImage, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    )
+                    if (job.imageUrls.size > 1) {
+                        Surface(
+                            color = Color.Black.copy(alpha = 0.6f),
+                            shape = RoundedCornerShape(bottomStart = 8.dp),
+                            modifier = Modifier.align(Alignment.TopEnd)
+                        ) {
+                            Text(
+                                text = "+${job.imageUrls.size - 1}",
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -652,7 +746,8 @@ private fun BidDialog(
     availabilityError: String?,
     errorMessage: String?,
     onDismiss: () -> Unit,
-    onSubmit: (price: Double, message: String, estimatedArrivalMinutes: Int?) -> Unit
+    onSubmit: (price: Double, message: String, estimatedArrivalMinutes: Int?) -> Unit,
+    onImageClick: (String) -> Unit
 ) {
     var price by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
@@ -672,6 +767,47 @@ private fun BidDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                job.imageUrls.firstOrNull()?.takeIf { it.isNotBlank() }?.let { imageUrl ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(140.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .clickable { onImageClick(imageUrl) }
+                    ) {
+                        SubcomposeAsyncImage(
+                            model = imageUrl,
+                            contentDescription = "Job image",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                            loading = {
+                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                                }
+                            },
+                            error = {
+                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Outlined.BrokenImage, contentDescription = null, modifier = Modifier.size(28.dp), tint = MaterialTheme.colorScheme.error)
+                                }
+                            }
+                        )
+                        if (job.imageUrls.size > 1) {
+                            Surface(
+                                color = Color.Black.copy(alpha = 0.6f),
+                                shape = RoundedCornerShape(bottomStart = 10.dp),
+                                modifier = Modifier.align(Alignment.TopEnd)
+                            ) {
+                                Text(
+                                    text = "+${job.imageUrls.size - 1} more",
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                )
+                            }
+                        }
+                    }
+                }
                 Text(job.description, style = MaterialTheme.typography.bodyMedium)
                 Text(
                     "Preferred: ${job.preferredDate} ${job.preferredTime}",
