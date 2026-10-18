@@ -23,5 +23,6 @@ data class Bid(
     val certificateUrl: String? = null,
     val distanceKm: Double? = null,
     val estimatedArrivalMinutes: Int? = null,
-    @ServerTimestamp val createdAt: Date? = null
+    @ServerTimestamp val createdAt: Date? = null,
+    val isWithdrawn: Boolean = false
 )

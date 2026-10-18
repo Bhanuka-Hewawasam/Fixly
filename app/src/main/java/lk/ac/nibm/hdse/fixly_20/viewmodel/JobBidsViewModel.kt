@@ -6,7 +6,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import lk.ac.nibm.hdse.fixly_20.data.repository.BidRepository
+import lk.ac.nibm.hdse.fixly_20.data.repository.JobRepository
 import lk.ac.nibm.hdse.fixly_20.model.Bid
+import lk.ac.nibm.hdse.fixly_20.model.JobPost
 
 enum class BidSortOption {
     RECOMMENDED,
@@ -17,6 +19,8 @@ enum class BidSortOption {
 
 data class JobBidsUiState(
     val isLoading: Boolean = true,
+    val job: JobPost? = null,
+    val hasLoadedJob: Boolean = false,
     val bids: List<Bid> = emptyList(),
     val visibleBids: List<Bid> = emptyList(),
     val recommendedBidId: String? = null,
@@ -29,13 +33,21 @@ data class JobBidsUiState(
 
 class JobBidsViewModel(
     private val jobId: String,
-    private val bidRepository: BidRepository = BidRepository()
+    private val bidRepository: BidRepository = BidRepository(),
+    private val jobRepository: JobRepository = JobRepository()
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(JobBidsUiState())
     val uiState: StateFlow<JobBidsUiState> = _uiState
 
     init {
+        viewModelScope.launch {
+            jobRepository.observeJob(jobId).collect { job ->
+                _uiState.value = applyBidFilters(
+                    _uiState.value.copy(job = job, hasLoadedJob = true)
+                )
+            }
+        }
         viewModelScope.launch {
             bidRepository.observeBidsForJob(jobId).collect { bids ->
                 _uiState.value = applyBidFilters(_uiState.value.copy(
@@ -77,7 +89,8 @@ class JobBidsViewModel(
 
     private fun applyBidFilters(state: JobBidsUiState): JobBidsUiState {
         val filteredBids = state.bids.filter { bid ->
-            !state.certificateAttachedOnly || !bid.certificateUrl.isNullOrBlank()
+            !bid.isWithdrawn &&
+                (!state.certificateAttachedOnly || !bid.certificateUrl.isNullOrBlank())
         }
         val minPrice = state.bids.minOfOrNull { it.price } ?: 0.0
         val priceRange = ((state.bids.maxOfOrNull { it.price } ?: minPrice) - minPrice)
@@ -111,6 +124,12 @@ class JobBidsViewModel(
         if (bid.ratingCount == 0) bid.providerReviewCount else bid.ratingCount
 
     fun selectBid(bidId: String) {
+        if (_uiState.value.job?.status != "Open") {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "This job is no longer open for bid selection."
+            )
+            return
+        }
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSelecting = true, errorMessage = null)
 

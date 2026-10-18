@@ -42,8 +42,21 @@ fun MyBookingsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val activeCount = uiState.jobs.count { it.status in listOf("Open", "Accepted", "In Progress", "Assigned") }
+    var jobToCancel by remember { mutableStateOf<JobPost?>(null) }
+    var cancelReason by remember { mutableStateOf("") }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(uiState.cancellationSuccessJobId) {
+        if (uiState.cancellationSuccessJobId != null) {
+            jobToCancel = null
+            cancelReason = ""
+            snackbarHostState.showSnackbar("Job cancelled successfully.")
+            viewModel.clearCancellationState()
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("My Bookings", fontWeight = FontWeight.Bold, fontSize = 20.sp) },
@@ -112,12 +125,72 @@ fun MyBookingsScreen(
                         BookingCard(
                             job = job,
                             onViewBids = { onOpenJobBids(job.jobId) },
-                            onTrack = { onTrackProvider(job.jobId) }
+                            onTrack = { onTrackProvider(job.jobId) },
+                            onCancel = {
+                                viewModel.clearCancellationState()
+                                cancelReason = ""
+                                jobToCancel = job
+                            },
+                            isCancelling = uiState.cancellingJobId == job.jobId
                         )
                     }
                 }
             }
         }
+    }
+
+    jobToCancel?.let { job ->
+        AlertDialog(
+            onDismissRequest = {
+                if (uiState.cancellingJobId == null) {
+                    jobToCancel = null
+                    viewModel.clearCancellationState()
+                }
+            },
+            title = { Text("Cancel job?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        if (job.status == "Accepted") {
+                            "This will cancel the booking with ${job.assignedProviderName ?: "the provider"}."
+                        } else {
+                            "This will permanently cancel your open job request."
+                        }
+                    )
+                    OutlinedTextField(
+                        value = cancelReason,
+                        onValueChange = { cancelReason = it },
+                        label = { Text("Reason (optional)") },
+                        enabled = uiState.cancellingJobId == null,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    uiState.cancellationError?.let {
+                        Text(it, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.cancelJobAsCustomer(job.jobId, cancelReason) },
+                    enabled = uiState.cancellingJobId == null
+                ) {
+                    if (uiState.cancellingJobId == job.jobId) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Confirm cancellation")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        jobToCancel = null
+                        viewModel.clearCancellationState()
+                    },
+                    enabled = uiState.cancellingJobId == null
+                ) { Text("Keep job") }
+            }
+        )
     }
 }
 
@@ -125,7 +198,9 @@ fun MyBookingsScreen(
 private fun BookingCard(
     job: JobPost,
     onViewBids: () -> Unit,
-    onTrack: () -> Unit
+    onTrack: () -> Unit,
+    onCancel: () -> Unit,
+    isCancelling: Boolean
 ) {
     val context = LocalContext.current
     val categoryIcon = getCategoryVectorIcon(job.category)
@@ -424,6 +499,19 @@ private fun BookingCard(
                         modifier = Modifier.fillMaxWidth().height(48.dp)
                     ) {
                         Text("View Work Evidence", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
+                    }
+                }
+            }
+            if (!job.isEmergency && job.status in listOf("Open", "Accepted")) {
+                OutlinedButton(
+                    onClick = onCancel,
+                    enabled = !isCancelling,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (isCancelling) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Cancel job")
                     }
                 }
             }

@@ -21,8 +21,21 @@ fun AcceptedJobsScreen(
     viewModel: AcceptedJobsViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var jobToCancel by remember { mutableStateOf<JobPost?>(null) }
+    var cancelReason by remember { mutableStateOf("") }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(uiState.cancellationSuccessJobId) {
+        if (uiState.cancellationSuccessJobId != null) {
+            jobToCancel = null
+            cancelReason = ""
+            snackbarHostState.showSnackbar("Booking cancelled. The job is open for bids again.")
+            viewModel.clearCancellationState()
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("My Accepted Jobs") },
@@ -48,16 +61,78 @@ fun AcceptedJobsScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(uiState.jobs) { job ->
-                        AcceptedJobCard(job = job, onClick = { onOpenJob(job.jobId) })
+                        AcceptedJobCard(
+                            job = job,
+                            onClick = { onOpenJob(job.jobId) },
+                            onCancel = {
+                                viewModel.clearCancellationState()
+                                cancelReason = ""
+                                jobToCancel = job
+                            },
+                            isCancelling = uiState.cancellingJobId == job.jobId
+                        )
                     }
                 }
             }
         }
     }
+
+    jobToCancel?.let { job ->
+        AlertDialog(
+            onDismissRequest = {
+                if (uiState.cancellingJobId == null) {
+                    jobToCancel = null
+                    viewModel.clearCancellationState()
+                }
+            },
+            title = { Text("Cancel booking?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("This booking will be reopened for bids. Your bid will be withdrawn and you cannot bid on this job again.")
+                    OutlinedTextField(
+                        value = cancelReason,
+                        onValueChange = { cancelReason = it },
+                        label = { Text("Reason (optional)") },
+                        enabled = uiState.cancellingJobId == null,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    uiState.cancellationError?.let {
+                        Text(it, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.cancelJobAsProvider(job.jobId, cancelReason) },
+                    enabled = uiState.cancellingJobId == null
+                ) {
+                    if (uiState.cancellingJobId == job.jobId) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Confirm cancellation")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        jobToCancel = null
+                        viewModel.clearCancellationState()
+                    },
+                    enabled = uiState.cancellingJobId == null
+                ) { Text("Keep booking") }
+            }
+        )
+    }
 }
 
 @Composable
-private fun AcceptedJobCard(job: JobPost, onClick: () -> Unit) {
+private fun AcceptedJobCard(
+    job: JobPost,
+    onClick: () -> Unit,
+    onCancel: () -> Unit,
+    isCancelling: Boolean
+) {
     Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -76,6 +151,19 @@ private fun AcceptedJobCard(job: JobPost, onClick: () -> Unit) {
             Spacer(modifier = Modifier.height(6.dp))
             Text("📍 ${job.address}", style = MaterialTheme.typography.bodySmall)
             Text("Customer: ${job.customerName}", style = MaterialTheme.typography.bodySmall)
+            if (!job.isEmergency && job.status == "Accepted") {
+                OutlinedButton(
+                    onClick = onCancel,
+                    enabled = !isCancelling,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (isCancelling) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Cancel booking")
+                    }
+                }
+            }
         }
     }
 }

@@ -118,6 +118,121 @@ class JobRepository(
         awaitClose { listener.remove() }
     }
 
+    suspend fun cancelJobAsCustomer(jobId: String, reason: String): Result<Unit> =
+        cancelJob(jobId, reason, "customer")
+
+    suspend fun cancelJobAsProvider(jobId: String, reason: String): Result<Unit> =
+        cancelJob(jobId, reason, "provider")
+
+    private suspend fun cancelJob(jobId: String, reason: String, cancelledBy: String): Result<Unit> {
+        return try {
+            val uid = firebaseAuth.currentUser?.uid
+                ?: throw IllegalStateException("Sign in to cancel this job.")
+            val jobRef = firestore.collection("jobPosts").document(jobId)
+            firestore.runTransaction { transaction ->
+                val jobSnapshot = transaction.get(jobRef)
+                if (!jobSnapshot.exists()) throw IllegalStateException("This job is already closed")
+                if (jobSnapshot.getBoolean("isEmergency") == true) {
+                    throw IllegalStateException("Emergency jobs cannot be cancelled here.")
+                }
+
+                val status = jobSnapshot.getString("status")
+                val providerId = jobSnapshot.getString("assignedProviderId")
+                if (cancelledBy == "customer") {
+                    if (jobSnapshot.getString("customerId") != uid) {
+                        throw IllegalStateException("You can cancel only jobs you posted.")
+                    }
+                    if (status !in listOf("Open", "Accepted")) {
+                        throw IllegalStateException(
+                            if (status == "In Progress" || status == "Completed") {
+                                "Work has already started"
+                            } else {
+                                "This job is already closed"
+                            }
+                        )
+                    }
+                } else {
+                    if (providerId != uid) {
+                        throw IllegalStateException("You can cancel only bookings assigned to you.")
+                    }
+                    if (status != "Accepted") {
+                        throw IllegalStateException(
+                            if (status == "In Progress" || status == "Completed") {
+                                "Work has already started"
+                            } else {
+                                "This job is already closed"
+                            }
+                        )
+                    }
+                }
+
+                val bookingLockId = jobSnapshot.getString("bookingLockId")
+                val bookingLockRef = bookingLockId
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { firestore.collection("bookingLocks").document(it) }
+                val bookingLockSnapshot = bookingLockRef?.let(transaction::get)
+                val slotRefs = providerId?.let {
+                    providerJobSlotKeys(
+                        it,
+                        jobSnapshot.getString("preferredDate").orEmpty(),
+                        jobSnapshot.getString("preferredTime").orEmpty()
+                    ).map { slotKey -> firestore.collection("providerSlots").document(slotKey) }
+                }.orEmpty()
+                val slotSnapshots = slotRefs.map { slotRef -> transaction.get(slotRef) }
+                val bidRef = if (cancelledBy == "provider") {
+                    firestore.collection("jobPosts").document(jobId)
+                        .collection("bids").document(uid)
+                } else {
+                    null
+                }
+                val bidSnapshot = bidRef?.let(transaction::get)
+
+                val cancellationFields = mutableMapOf<String, Any>(
+                    "cancelledBy" to cancelledBy,
+                    "cancelledAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                )
+                if (reason.isNotBlank()) {
+                    cancellationFields["cancelReason"] = reason.trim()
+                } else {
+                    cancellationFields["cancelReason"] = com.google.firebase.firestore.FieldValue.delete()
+                }
+
+                if (cancelledBy == "customer") {
+                    transaction.update(jobRef, cancellationFields + ("status" to "Cancelled"))
+                } else {
+                    transaction.update(
+                        jobRef,
+                        cancellationFields + mapOf(
+                            "status" to "Open",
+                            "assignedProviderId" to com.google.firebase.firestore.FieldValue.delete(),
+                            "assignedProviderName" to com.google.firebase.firestore.FieldValue.delete(),
+                            "acceptedBidPrice" to com.google.firebase.firestore.FieldValue.delete(),
+                            "acceptedProviderRating" to com.google.firebase.firestore.FieldValue.delete(),
+                            "acceptedProviderReviewCount" to com.google.firebase.firestore.FieldValue.delete(),
+                            "providerPhone" to com.google.firebase.firestore.FieldValue.delete(),
+                            "providerCertificateUrl" to com.google.firebase.firestore.FieldValue.delete(),
+                            "providerLocation" to com.google.firebase.firestore.FieldValue.delete(),
+                            "selectedBidId" to com.google.firebase.firestore.FieldValue.delete(),
+                            "bookingLockId" to com.google.firebase.firestore.FieldValue.delete()
+                        )
+                    )
+                    if (bidRef != null && bidSnapshot?.exists() == true) {
+                        transaction.update(bidRef, "isWithdrawn", true)
+                    }
+                }
+                if (bookingLockRef != null && bookingLockSnapshot?.exists() == true) {
+                    transaction.delete(bookingLockRef)
+                }
+                slotRefs.zip(slotSnapshots)
+                    .filter { (_, slotSnapshot) -> slotSnapshot.getString("jobId") == jobId }
+                    .forEach { (slotRef, _) -> transaction.delete(slotRef) }
+            }.await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     fun observeJob(jobId: String): Flow<JobPost?> = callbackFlow {
         val listener = firestore.collection("jobPosts").document(jobId)
             .addSnapshotListener { snapshot, error ->
@@ -141,7 +256,7 @@ class JobRepository(
 
         val listener = firestore.collection("jobPosts")
             .whereEqualTo("assignedProviderId", providerId)
-            .whereIn("status", listOf("Assigned", "In Progress"))
+            .whereIn("status", listOf("Accepted", "Assigned", "In Progress"))
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     error.printStackTrace()

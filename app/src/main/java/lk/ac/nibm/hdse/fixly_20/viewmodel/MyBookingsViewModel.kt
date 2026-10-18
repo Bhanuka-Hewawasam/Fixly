@@ -7,16 +7,20 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import lk.ac.nibm.hdse.fixly_20.data.repository.BookingsRepository
+import lk.ac.nibm.hdse.fixly_20.data.repository.JobRepository
 import lk.ac.nibm.hdse.fixly_20.model.JobPost
 
-// Same shape as before, so MyBookingsScreen needs no changes
 data class MyBookingsUiState(
     val isLoading: Boolean = true,
-    val jobs: List<JobPost> = emptyList()
+    val jobs: List<JobPost> = emptyList(),
+    val cancellingJobId: String? = null,
+    val cancellationSuccessJobId: String? = null,
+    val cancellationError: String? = null
 )
 
 class MyBookingsViewModel(
-    private val repository: BookingsRepository = BookingsRepository()
+    private val repository: BookingsRepository = BookingsRepository(),
+    private val jobRepository: JobRepository = JobRepository()
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MyBookingsUiState())
@@ -40,6 +44,39 @@ class MyBookingsViewModel(
                 firstSyncDone = true
                 _uiState.update { it.copy(isLoading = false) }
             }
+        }
+    }
+
+    fun cancelJobAsCustomer(jobId: String, reason: String) {
+        if (_uiState.value.cancellingJobId != null) return
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    cancellingJobId = jobId,
+                    cancellationSuccessJobId = null,
+                    cancellationError = null
+                )
+            }
+            jobRepository.cancelJobAsCustomer(jobId, reason)
+                .onSuccess {
+                    _uiState.update {
+                        it.copy(cancellingJobId = null, cancellationSuccessJobId = jobId)
+                    }
+                }
+                .onFailure { error ->
+                    _uiState.update {
+                        it.copy(
+                            cancellingJobId = null,
+                            cancellationError = error.localizedMessage ?: "Could not cancel this job."
+                        )
+                    }
+                }
+        }
+    }
+
+    fun clearCancellationState() {
+        _uiState.update {
+            it.copy(cancellationSuccessJobId = null, cancellationError = null)
         }
     }
 }

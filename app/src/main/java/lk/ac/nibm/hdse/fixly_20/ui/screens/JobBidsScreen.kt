@@ -43,9 +43,21 @@ fun JobBidsScreen(
         }
     ) { padding ->
         when {
-            uiState.isLoading -> {
+            uiState.isLoading || !uiState.hasLoadedJob -> {
                 Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
+                }
+            }
+
+            uiState.job?.status == "Cancelled" -> {
+                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                    Text("This job was cancelled. Its bids can no longer be accepted.")
+                }
+            }
+
+            uiState.job?.status != "Open" -> {
+                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                    Text("This job is no longer open for bid selection.")
                 }
             }
 
@@ -110,6 +122,7 @@ fun JobBidsScreen(
                             bid = bid,
                             isRecommended = bid.bidId == uiState.recommendedBidId,
                             isSelecting = uiState.isSelecting,
+                            canSelect = uiState.job?.status == "Open",
                             onSelect = { viewModel.selectBid(bid.bidId) }
                         )
                     }
@@ -124,6 +137,7 @@ private fun BidCard(
     bid: Bid,
     isRecommended: Boolean,
     isSelecting: Boolean,
+    canSelect: Boolean,
     onSelect: () -> Unit
 ) {
     val context = LocalContext.current
@@ -192,7 +206,7 @@ private fun BidCard(
             Spacer(modifier = Modifier.height(12.dp))
             Button(
                 onClick = onSelect,
-                enabled = !isSelecting,
+                enabled = !isSelecting && canSelect,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Select This Provider")
