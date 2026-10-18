@@ -10,6 +10,7 @@ import lk.ac.nibm.hdse.fixly_20.model.ServiceRating
 import lk.ac.nibm.hdse.fixly_20.model.ServiceRatingPolicy
 import lk.ac.nibm.hdse.fixly_20.model.ServiceReview
 import lk.ac.nibm.hdse.fixly_20.model.ServiceReviewPolicy
+import lk.ac.nibm.hdse.fixly_20.util.providerJobSlotKeys
 
 /**
  * Everything that happens AFTER a provider marks a job Completed:
@@ -49,6 +50,18 @@ class JobCompletionRepository(
                 val ratingAggregateSnapshot = transaction.get(ratingAggregateRef)
                 val reviewSnapshot = transaction.get(reviewRef)
                 val lockSnapshot = transaction.get(bookingLockRef)
+                val slotRefs = if (jobSnapshot.getBoolean("isEmergency") == true) {
+                    emptyList()
+                } else {
+                    providerJobSlotKeys(
+                        providerId,
+                        jobSnapshot.getString("preferredDate").orEmpty(),
+                        jobSnapshot.getString("preferredTime").orEmpty()
+                    ).map { slotKey ->
+                        firestore.collection("providerSlots").document(slotKey)
+                    }
+                }
+                val slotSnapshots = slotRefs.map { slotRef -> transaction.get(slotRef) }
                 val jobCustomerId = jobSnapshot.getString("customerId")
                 val assignedProviderId = jobSnapshot.getString("assignedProviderId")
                 if (jobCustomerId == assignedProviderId || customerId == assignedProviderId) {
@@ -133,12 +146,17 @@ class JobCompletionRepository(
                         "updatedAt" to FieldValue.serverTimestamp()
                     )
                 )
-                if (lockSnapshot.exists() && BookingPolicy.shouldReleaseLock(
+                if (BookingPolicy.shouldReleaseLock(
                         jobSnapshot.getString("status"),
                         customerConfirmed = true
                     )
                 ) {
-                    transaction.delete(bookingLockRef)
+                    if (lockSnapshot.exists()) transaction.delete(bookingLockRef)
+                    slotRefs.zip(slotSnapshots)
+                        .filter { (_, slotSnapshot) ->
+                            slotSnapshot.getString("jobId") == job.jobId
+                        }
+                        .forEach { (slotRef, _) -> transaction.delete(slotRef) }
                 }
             }.await()
 

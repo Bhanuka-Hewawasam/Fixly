@@ -3,6 +3,7 @@ package lk.ac.nibm.hdse.fixly_20.util
 import lk.ac.nibm.hdse.fixly_20.model.JobPost
 import java.text.ParsePosition
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Locale
 
 const val JOB_DURATION_HOURS = 2
@@ -26,6 +27,19 @@ fun parseJobTimeWindow(preferredDate: String, preferredTime: String): JobTimeWin
         startMillis = start,
         endMillis = start + JOB_DURATION_HOURS * 60L * 60L * 1000L
     )
+}
+
+fun providerJobSlotKeys(providerId: String, preferredDate: String, preferredTime: String): List<String> {
+    val window = parseJobTimeWindow(preferredDate, preferredTime) ?: return emptyList()
+    val dateFormatter = SimpleDateFormat("yyyyMMdd", Locale.US)
+    val hourFormatter = SimpleDateFormat("HH", Locale.US)
+    val calendar = Calendar.getInstance().apply { timeInMillis = window.startMillis }
+    val slotKeys = linkedSetOf<String>()
+    while (calendar.timeInMillis < window.endMillis) {
+        slotKeys += "${providerId}_${dateFormatter.format(calendar.time)}_${hourFormatter.format(calendar.time)}"
+        calendar.add(Calendar.HOUR_OF_DAY, 1)
+    }
+    return slotKeys.toList()
 }
 
 fun jobsOverlap(first: JobPost, second: JobPost): Boolean {

@@ -14,6 +14,7 @@ import lk.ac.nibm.hdse.fixly_20.data.remote.CloudinaryUploader
 import lk.ac.nibm.hdse.fixly_20.model.JobPost
 import lk.ac.nibm.hdse.fixly_20.model.JobStatusPolicy
 import lk.ac.nibm.hdse.fixly_20.util.ServiceCategories
+import lk.ac.nibm.hdse.fixly_20.util.providerJobSlotKeys
 
 class JobRepository(
     private val firebaseAuth: FirebaseAuth = FirebaseAuth.getInstance(),
@@ -217,7 +218,24 @@ class JobRepository(
                 if (!allowed) {
                     throw IllegalStateException("Invalid status transition from $currentStatus to $status")
                 }
+                val slotRefs = if (status == "Completed" && snapshot.getBoolean("isEmergency") != true) {
+                    providerJobSlotKeys(
+                        providerId,
+                        snapshot.getString("preferredDate").orEmpty(),
+                        snapshot.getString("preferredTime").orEmpty()
+                    ).map { slotKey ->
+                        firestore.collection("providerSlots").document(slotKey)
+                    }
+                } else {
+                    emptyList()
+                }
+                val slotSnapshots = slotRefs.map { slotRef -> transaction.get(slotRef) }
                 transaction.update(jobRef, "status", status)
+                slotRefs.zip(slotSnapshots)
+                    .filter { (_, slotSnapshot) ->
+                        slotSnapshot.getString("jobId") == jobId
+                    }
+                    .forEach { (slotRef, _) -> transaction.delete(slotRef) }
             }.await()
             Result.success(Unit)
         } catch (e: Exception) {

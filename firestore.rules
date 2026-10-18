@@ -593,6 +593,24 @@ service cloud.firestore {
       allow update: if false;
     }
 
+    match /providerSlots/{slotId} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'providerId', 'jobId', 'customerId', 'createdAt'
+        ])
+        && request.resource.data.customerId == request.auth.uid
+        && get(/databases/$(database)/documents/jobPosts/$(request.resource.data.jobId)).data.customerId
+          == request.auth.uid;
+      allow update: if false;
+      allow delete: if signedIn()
+        && (
+          resource.data.customerId == request.auth.uid
+          || resource.data.providerId == request.auth.uid
+        );
+    }
+
     match /serviceReviews/{bookingId} {
       allow read: if signedIn();
       allow create: if signedIn()

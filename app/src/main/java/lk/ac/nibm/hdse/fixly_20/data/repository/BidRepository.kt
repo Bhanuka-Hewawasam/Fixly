@@ -16,6 +16,7 @@ import lk.ac.nibm.hdse.fixly_20.model.ServiceRatingPolicy
 import lk.ac.nibm.hdse.fixly_20.model.User
 import lk.ac.nibm.hdse.fixly_20.util.findOverlappingActiveJob
 import lk.ac.nibm.hdse.fixly_20.util.jobTimeConflictMessage
+import lk.ac.nibm.hdse.fixly_20.util.providerJobSlotKeys
 
 class BidRepository(
     private val firebaseAuth: FirebaseAuth = FirebaseAuth.getInstance(),
@@ -184,6 +185,26 @@ class BidRepository(
                 val lockId = ServiceRatingPolicy.bookingLockId(customerId, bid.providerId, category)
                 val lockRef = firestore.collection("bookingLocks").document(lockId)
                 val lockSnapshot = transaction.get(lockRef)
+                val slotRefs = if (jobSnapshot.getBoolean("isEmergency") == true) {
+                    emptyList()
+                } else {
+                    providerJobSlotKeys(
+                        bid.providerId,
+                        jobSnapshot.getString("preferredDate").orEmpty(),
+                        jobSnapshot.getString("preferredTime").orEmpty()
+                    ).map { slotKey ->
+                        firestore.collection("providerSlots").document(slotKey)
+                    }
+                }
+                val slotSnapshots = slotRefs.map { slotRef -> transaction.get(slotRef) }
+                if (slotSnapshots.any { slotSnapshot ->
+                        slotSnapshot.exists() && slotSnapshot.getString("jobId") != jobId
+                    }
+                ) {
+                    throw IllegalStateException(
+                        "This provider is no longer available at that time. Please choose another bid."
+                    )
+                }
                 if (!BookingPolicy.canAssign(
                         jobSnapshot.getString("status"),
                         activeLockExists = lockSnapshot.exists()
@@ -229,6 +250,19 @@ class BidRepository(
                         "jobId" to jobId
                     )
                 )
+                slotRefs.zip(slotSnapshots)
+                    .filter { (_, slotSnapshot) -> !slotSnapshot.exists() }
+                    .forEach { (slotRef, _) ->
+                        transaction.set(
+                            slotRef,
+                            mapOf(
+                                "providerId" to bid.providerId,
+                                "jobId" to jobId,
+                                "customerId" to customerId,
+                                "createdAt" to FieldValue.serverTimestamp()
+                            )
+                        )
+                    }
             }.await()
 
             Result.success(Unit)
