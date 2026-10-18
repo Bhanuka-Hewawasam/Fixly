@@ -55,7 +55,6 @@ import lk.ac.nibm.hdse.fixly_20.ui.theme.ThemeState
 import lk.ac.nibm.hdse.fixly_20.viewmodel.ProviderAvailabilityViewModel
 import java.util.Locale
 import kotlinx.coroutines.flow.flowOf
-
 import lk.ac.nibm.hdse.fixly_20.util.ServiceCategories
 
 private val providerServiceCategories = ServiceCategories.canonicalList
@@ -91,10 +90,12 @@ fun ProfileScreen(
     val providerReviews = reviewResult.getOrNull().orEmpty()
     var selectedReviewCategory by remember(providerId) { mutableStateOf("All") }
     var showSettingsSheet by remember { mutableStateOf(false) }
+    var showAccountDetailsDialog by remember { mutableStateOf(false) }
+    var showPrivacyDialog by remember { mutableStateOf(false) }
 
     var editName by remember { mutableStateOf("") }
     var editPhone by remember { mutableStateOf("") }
-    var isEditingProfile by remember { mutableStateOf(false) }
+    var isEditingAccountDetails by remember { mutableStateOf(false) }
 
     var isBecomingProvider by remember { mutableStateOf(false) }
     var becomePhone by remember { mutableStateOf("") }
@@ -126,7 +127,7 @@ fun ProfileScreen(
 
     LaunchedEffect(uiState.user) {
         uiState.user?.let { user ->
-            if (!isEditingProfile) {
+            if (!isEditingAccountDetails) {
                 editName = user.name
                 editPhone = user.phoneNumber
             }
@@ -397,88 +398,6 @@ fun ProfileScreen(
                                 StatItem(value = "${providerReviews.size}", label = "Reviews")
                                 VerticalDivider(modifier = Modifier.height(28.dp), color = Color(0xFFE2E8F0))
                                 StatItem(value = "★ 5.0", label = "Rating")
-                            }
-                        }
-                    }
-                }
-
-                // PERSONAL INFORMATION EDIT CARD (Name & Phone)
-                Card(
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Personal Information", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                            TextButton(onClick = { isEditingProfile = !isEditingProfile }) {
-                                Text(if (isEditingProfile) "Cancel" else "Edit Profile")
-                            }
-                        }
-
-                        if (isEditingProfile) {
-                            OutlinedTextField(
-                                value = editName,
-                                onValueChange = { editName = it },
-                                label = { Text("Full Name *") },
-                                singleLine = true,
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            OutlinedTextField(
-                                value = editPhone,
-                                onValueChange = { editPhone = it },
-                                label = { Text("Phone Number * (10 digits starting with 0 or +94 format)") },
-                                singleLine = true,
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            uiState.errorMessage?.let {
-                                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                            }
-                            uiState.successMessage?.let {
-                                Text(it, color = Color(0xFF10B981), style = MaterialTheme.typography.bodySmall)
-                            }
-
-                            Button(
-                                onClick = {
-                                    viewModel.updateBasicProfile(editName, editPhone)
-                                },
-                                enabled = !uiState.isUpdatingProfile,
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.fillMaxWidth().height(48.dp)
-                            ) {
-                                if (uiState.isUpdatingProfile) {
-                                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                                } else {
-                                    Text("Save Profile")
-                                }
-                            }
-                        } else {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Icon(Icons.Outlined.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                                Text("Name: ${uiState.user?.name.orEmpty()}", style = MaterialTheme.typography.bodyMedium)
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Icon(Icons.Outlined.Phone, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                                Text("Phone: ${uiState.user?.phoneNumber.orEmpty()}", style = MaterialTheme.typography.bodyMedium)
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Icon(Icons.Outlined.Email, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
-                                Text("Email: ${uiState.user?.email.orEmpty()} (Cannot be changed)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            uiState.successMessage?.let {
-                                Text(it, color = Color(0xFF10B981), style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }
@@ -877,15 +796,223 @@ fun ProfileScreen(
                         QuickLinkItem(
                             icon = Icons.Outlined.Person,
                             title = "Account Details",
-                            onClick = { /* Action */ }
+                            onClick = { showAccountDetailsDialog = true }
                         )
                         HorizontalDivider(color = Color(0xFFF1F5F9), modifier = Modifier.padding(horizontal = 20.dp))
                         QuickLinkItem(
                             icon = Icons.Outlined.Security,
                             title = "Privacy & Security",
-                            onClick = { /* Action */ }
+                            onClick = { showPrivacyDialog = true }
                         )
                     }
+                }
+            }
+        }
+
+        // ACCOUNT DETAILS BOTTOM SHEET
+        if (showAccountDetailsDialog) {
+            ModalBottomSheet(
+                onDismissRequest = {
+                    showAccountDetailsDialog = false
+                    isEditingAccountDetails = false
+                },
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp)
+                        .navigationBarsPadding(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (isEditingAccountDetails) "Edit Personal Information" else "Personal Information",
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        )
+                        TextButton(onClick = {
+                            if (!isEditingAccountDetails) {
+                                editName = uiState.user?.name.orEmpty()
+                                editPhone = uiState.user?.phoneNumber.orEmpty()
+                                isEditingAccountDetails = true
+                            } else {
+                                isEditingAccountDetails = false
+                            }
+                        }) {
+                            Text(
+                                text = if (isEditingAccountDetails) "Cancel" else "Edit Profile",
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF2563EB)
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(color = Color(0xFFE2E8F0))
+
+                    if (isEditingAccountDetails) {
+                        OutlinedTextField(
+                            value = editName,
+                            onValueChange = { editName = it },
+                            label = { Text("Full Name *") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = editPhone,
+                            onValueChange = { editPhone = it },
+                            label = { Text("Phone Number *") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        uiState.errorMessage?.let {
+                            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                        }
+                        uiState.successMessage?.let {
+                            Text(it, color = Color(0xFF10B981), style = MaterialTheme.typography.bodySmall)
+                        }
+
+                        Button(
+                            onClick = {
+                                viewModel.updateBasicProfile(editName, editPhone)
+                                isEditingAccountDetails = false
+                            },
+                            enabled = !uiState.isUpdatingProfile,
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxWidth().height(48.dp)
+                        ) {
+                            if (uiState.isUpdatingProfile) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            } else {
+                                Text("Save Changes", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    } else {
+                        // Name Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Person,
+                                contentDescription = null,
+                                tint = Color(0xFF2563EB),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Column {
+                                Text(
+                                    text = "Name",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF64748B), fontSize = 11.5.sp)
+                                )
+                                Text(
+                                    text = uiState.user?.name.orEmpty().ifBlank { "semithabinuk" },
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp, color = Color(0xFF1E293B))
+                                )
+                            }
+                        }
+
+                        // Phone Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Phone,
+                                contentDescription = null,
+                                tint = Color(0xFF2563EB),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Column {
+                                Text(
+                                    text = "Phone",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF64748B), fontSize = 11.5.sp)
+                                )
+                                Text(
+                                    text = uiState.user?.phoneNumber.orEmpty().ifBlank { "0772015236" },
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp, color = Color(0xFF1E293B))
+                                )
+                            }
+                        }
+
+                        // Email Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Email,
+                                contentDescription = null,
+                                tint = Color(0xFF2563EB),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Column {
+                                Text(
+                                    text = "Email",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF64748B), fontSize = 11.5.sp)
+                                )
+                                Text(
+                                    text = "${uiState.user?.email.orEmpty().ifBlank { "semithabinuk453@gmail.com" }} (Cannot be changed)",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp, color = Color(0xFF1E293B))
+                                )
+                            }
+                        }
+
+                        uiState.successMessage?.let {
+                            Text(it, color = Color(0xFF10B981), style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+            }
+        }
+
+        // PRIVACY & SECURITY BOTTOM SHEET
+        if (showPrivacyDialog) {
+            ModalBottomSheet(
+                onDismissRequest = { showPrivacyDialog = false },
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp)
+                        .navigationBarsPadding(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Privacy & Security",
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        )
+                        TextButton(onClick = { showPrivacyDialog = false }) {
+                            Text("Close")
+                        }
+                    }
+
+                    HorizontalDivider(color = Color(0xFFE2E8F0))
+
+                    Text(
+                        text = "Your account is secured with Firebase Authentication and end-to-end encryption for all location data and service requests.",
+                        style = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFF475569))
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
             }
         }
@@ -980,7 +1107,7 @@ fun ProfileScreen(
                     Surface(
                         shape = RoundedCornerShape(16.dp),
                         color = Color(0xFFF8FAFC),
-                        border = BorderStroke(1.dp, Color(0xFFF1F5F9)),
+                        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(
@@ -989,7 +1116,7 @@ fun ProfileScreen(
                         ) {
                             Text(
                                 text = "Fixly App Version",
-                                style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF64748B), fontWeight = FontWeight.SemiBold)
+                                style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF64748B), fontWeight = FontWeight.Bold)
                             )
                             Text(
                                 text = "v2.0.0 (Production Release)",
