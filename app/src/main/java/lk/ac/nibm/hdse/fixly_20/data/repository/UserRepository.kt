@@ -12,6 +12,7 @@ import lk.ac.nibm.hdse.fixly_20.data.local.toProfileEntity
 import lk.ac.nibm.hdse.fixly_20.data.local.toUser
 import lk.ac.nibm.hdse.fixly_20.data.remote.CloudinaryUploader
 import lk.ac.nibm.hdse.fixly_20.model.User
+import lk.ac.nibm.hdse.fixly_20.util.ServiceCategories
 
 /**
  * Fetches the currently logged-in user's profile document from Firestore.
@@ -62,6 +63,109 @@ class UserRepository(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    suspend fun becomeServiceProvider(
+        phoneNumber: String,
+        serviceAddress: String,
+        serviceCity: String,
+        serviceLatitude: Double,
+        serviceLongitude: Double,
+        serviceRadiusKm: Int,
+        serviceCategories: List<String>,
+        certificateUrl: String?
+    ): Result<Unit> = try {
+        val uid = firebaseAuth.currentUser?.uid
+            ?: throw IllegalStateException("Sign in to become a service provider.")
+        val trimmedPhone = phoneNumber.trim()
+        require(trimmedPhone.matches(Regex("^(0\\d{9}|\\+94\\d{9})$"))) {
+            "Phone number must be 10 digits starting with 0, or in +94 format."
+        }
+        require(serviceCategories.isNotEmpty()) { "Choose at least one service category." }
+        require(serviceLatitude.isFinite() && serviceLatitude in -90.0..90.0) {
+            "Choose a valid service location latitude."
+        }
+        require(serviceLongitude.isFinite() && serviceLongitude in -180.0..180.0) {
+            "Choose a valid service location longitude."
+        }
+        require(serviceRadiusKm in 1..100) { "Choose a service radius between 1 and 100 km." }
+
+        val userRef = firestore.collection("users").document(uid)
+        val projectionRef = firestore.collection("emergencyServiceAreas").document(uid)
+        val contactRef = firestore.collection("emergencyProviderContacts").document(uid)
+
+        firestore.runTransaction { transaction ->
+            val snapshot = transaction.get(userRef)
+            val existingRoles = snapshot.get("roles") as? List<*> ?: listOf("customer")
+            val newRoles = (existingRoles + "provider").distinct()
+
+            val updates = mutableMapOf<String, Any>(
+                "roles" to newRoles,
+                "phoneNumber" to trimmedPhone,
+                "serviceCategories" to serviceCategories.map { ServiceCategories.normalize(it) }.distinct(),
+                "serviceAddress" to serviceAddress.trim(),
+                "serviceCity" to serviceCity.trim(),
+                "serviceLatitude" to serviceLatitude,
+                "serviceLongitude" to serviceLongitude,
+                "serviceRadiusKm" to serviceRadiusKm,
+                "availableForEmergency" to true
+            )
+            if (!certificateUrl.isNullOrBlank()) {
+                updates["certificateUrl"] = certificateUrl
+            }
+            if (!snapshot.contains("verificationStatus")) {
+                updates["verificationStatus"] = "PENDING"
+            }
+            if (!snapshot.contains("isVerified")) {
+                updates["isVerified"] = false
+            }
+            if (!snapshot.contains("rating")) {
+                updates["rating"] = 0.0
+            }
+            if (!snapshot.contains("ratingCount")) {
+                updates["ratingCount"] = 0
+            }
+            if (!snapshot.contains("ratingSum")) {
+                updates["ratingSum"] = 0.0
+            }
+
+            transaction.update(userRef, updates)
+
+            val isVerified = snapshot.getBoolean("isVerified") == true
+            val verificationStatus = snapshot.getString("verificationStatus") ?: "PENDING"
+            val suspended = snapshot.getBoolean("suspended") == true
+            transaction.set(
+                projectionRef,
+                mapOf(
+                    "providerId" to uid,
+                    "displayName" to snapshot.getString("name").orEmpty(),
+                    "profilePhotoUrl" to snapshot.getString("profilePictureUrl"),
+                    "serviceAddress" to serviceAddress.trim(),
+                    "serviceCity" to serviceCity.trim(),
+                    "serviceLatitude" to serviceLatitude,
+                    "serviceLongitude" to serviceLongitude,
+                    "serviceRadiusKm" to serviceRadiusKm,
+                    "serviceCategories" to serviceCategories.map { ServiceCategories.normalize(it) }.distinct(),
+                    "availableForEmergency" to true,
+                    "rating" to (snapshot.getDouble("rating") ?: 0.0),
+                    "ratingCount" to (snapshot.getLong("ratingCount")?.toInt() ?: 0),
+                    "serviceRatings" to (snapshot.get("serviceRatings") ?: emptyMap<String, Any>()),
+                    "isVerified" to isVerified,
+                    "verificationStatus" to verificationStatus,
+                    "suspended" to suspended,
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+            )
+            transaction.set(
+                contactRef,
+                mapOf("providerId" to uid, "phoneNumber" to trimmedPhone)
+            )
+            Unit
+        }.await()
+
+        Result.success(Unit)
+    } catch (e: Exception) {
+        Result.failure(e)
     }
 
     suspend fun saveProviderServiceProfile(

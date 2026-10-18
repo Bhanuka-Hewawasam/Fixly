@@ -137,6 +137,77 @@ class ProviderAvailabilityViewModel(
         }
     }
 
+    fun becomeServiceProvider(
+        phoneNumber: String,
+        serviceAddress: String,
+        serviceCity: String,
+        latitude: String,
+        longitude: String,
+        serviceRadiusKm: Int,
+        serviceCategories: List<String>,
+        certificateUrl: String?
+    ) {
+        if (_uiState.value.isUpdating) return
+        val trimmedPhone = phoneNumber.trim()
+        if (!trimmedPhone.matches(Regex("^(0\\d{9}|\\+94\\d{9})$"))) {
+            _uiState.update { it.copy(errorMessage = "Phone number must be 10 digits starting with 0, or in +94 format.") }
+            return
+        }
+        if (serviceCategories.isEmpty()) {
+            _uiState.update { it.copy(errorMessage = "Choose at least one service category.") }
+            return
+        }
+        val parsedLatitude = latitude.toDoubleOrNull()
+        val parsedLongitude = longitude.toDoubleOrNull()
+        if (parsedLatitude == null || parsedLongitude == null) {
+            _uiState.update {
+                it.copy(errorMessage = "Choose your service location on the map or use your location once.")
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isUpdating = true, errorMessage = null, successMessage = null, saved = false) }
+            userRepository.becomeServiceProvider(
+                phoneNumber = trimmedPhone,
+                serviceAddress = serviceAddress,
+                serviceCity = serviceCity,
+                serviceLatitude = parsedLatitude,
+                serviceLongitude = parsedLongitude,
+                serviceRadiusKm = serviceRadiusKm,
+                serviceCategories = serviceCategories.map { ServiceCategories.normalize(it) },
+                certificateUrl = certificateUrl
+            ).onSuccess {
+                userRepository.getCurrentUserProfile()
+                    .onSuccess { user ->
+                        _uiState.update {
+                            it.copy(
+                                user = user,
+                                isUpdating = false,
+                                saved = true,
+                                successMessage = "You are now a Service Provider! Switch to provider mode below."
+                            )
+                        }
+                    }
+                    .onFailure { error ->
+                        _uiState.update {
+                            it.copy(
+                                isUpdating = false,
+                                errorMessage = error.localizedMessage ?: "Successfully registered as provider, but couldn't refresh profile."
+                            )
+                        }
+                    }
+            }.onFailure { error ->
+                _uiState.update {
+                    it.copy(
+                        isUpdating = false,
+                        errorMessage = error.localizedMessage ?: "Failed to register as a service provider."
+                    )
+                }
+            }
+        }
+    }
+
     fun saveServiceProfile(
         serviceAddress: String,
         serviceCity: String,

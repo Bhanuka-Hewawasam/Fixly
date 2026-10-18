@@ -10,6 +10,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -95,6 +96,15 @@ fun ProfileScreen(
     var editPhone by remember { mutableStateOf("") }
     var isEditingProfile by remember { mutableStateOf(false) }
 
+    var isBecomingProvider by remember { mutableStateOf(false) }
+    var becomePhone by remember { mutableStateOf("") }
+    var becomeAddress by remember { mutableStateOf("") }
+    var becomeCity by remember { mutableStateOf("") }
+    var becomeLatitude by remember { mutableStateOf("") }
+    var becomeLongitude by remember { mutableStateOf("") }
+    var becomeRadius by remember { mutableStateOf(20f) }
+    var becomeCategories by remember { mutableStateOf(setOf<String>()) }
+
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     var address by remember { mutableStateOf("") }
     var city by remember { mutableStateOf("") }
@@ -120,6 +130,9 @@ fun ProfileScreen(
                 editName = user.name
                 editPhone = user.phoneNumber
             }
+            if (becomePhone.isBlank()) {
+                becomePhone = user.phoneNumber
+            }
             address = user.serviceAddress
             city = user.serviceCity
             latitude = user.serviceLatitude?.toString().orEmpty()
@@ -136,7 +149,13 @@ fun ProfileScreen(
         locationError = null
     }
 
-    fun useCurrentLocationOnce() {
+    fun updateBecomeMapLocation(point: LatLng) {
+        becomeLatitude = point.latitude.toString()
+        becomeLongitude = point.longitude.toString()
+        locationError = null
+    }
+
+    fun useCurrentLocationOnce(isBecome: Boolean = false) {
         val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
         if (!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) &&
             !locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
@@ -155,7 +174,8 @@ fun ProfileScreen(
                 if (location == null) {
                     locationError = "Couldn't get a location. Choose the service point on the map."
                 } else {
-                    updateMapLocation(LatLng(location.latitude, location.longitude))
+                    if (isBecome) updateBecomeMapLocation(LatLng(location.latitude, location.longitude))
+                    else updateMapLocation(LatLng(location.latitude, location.longitude))
                 }
             }
             .addOnFailureListener {
@@ -178,6 +198,15 @@ fun ProfileScreen(
             LatLng(lat, lng)
         } else sriLankaMapCenter
     }
+
+    val becomeMapPoint = remember(becomeLatitude, becomeLongitude) {
+        val lat = becomeLatitude.toDoubleOrNull()
+        val lng = becomeLongitude.toDoubleOrNull()
+        if (lat != null && lng != null && lat in -90.0..90.0 && lng in -180.0..180.0) {
+            LatLng(lat, lng)
+        } else sriLankaMapCenter
+    }
+
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(mapPoint, if (latitude.isBlank()) 7f else 14f)
     }
@@ -188,6 +217,8 @@ fun ProfileScreen(
         if (parts.size >= 2) "${parts[0].firstOrNull() ?: 'S'}${parts[1].firstOrNull() ?: 'B'}"
         else "SB"
     }.uppercase()
+
+    val isProvider = uiState.user?.roles?.contains("provider") == true
 
     Scaffold(
         topBar = {
@@ -453,7 +484,192 @@ fun ProfileScreen(
                     }
                 }
 
-                if (activeRole == "provider" && uiState.user?.roles?.contains("provider") == true) {
+                // BECOME A SERVICE PROVIDER CARD (If not already a provider)
+                if (!isProvider) {
+                    Card(
+                        shape = RoundedCornerShape(24.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                        border = BorderStroke(1.dp, Color(0xFF2563EB)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { isBecomingProvider = !isBecomingProvider }
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(20.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text("Become a Service Provider", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary))
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("Offer your services on Fixly and accept local customer jobs.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                TextButton(onClick = { isBecomingProvider = !isBecomingProvider }) {
+                                    Text(if (isBecomingProvider) "Cancel" else "Get Started")
+                                }
+                            }
+
+                            if (isBecomingProvider) {
+                                OutlinedTextField(
+                                    value = becomePhone,
+                                    onValueChange = { becomePhone = it },
+                                    label = { Text("Phone Number * (10 digits starting with 0 or +94 format)") },
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(14.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                Text("Certificate (Optional)", fontWeight = FontWeight.SemiBold)
+                                if (!uiState.user?.certificateUrl.isNullOrBlank()) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uiState.user?.certificateUrl)))
+                                        },
+                                        shape = RoundedCornerShape(14.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("View Uploaded Certificate")
+                                    }
+                                }
+                                OutlinedButton(
+                                    onClick = { certificatePicker.launch("image/*") },
+                                    enabled = !uiState.isUploadingCertificate,
+                                    shape = RoundedCornerShape(14.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    if (uiState.isUploadingCertificate) {
+                                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                    } else {
+                                        Text(if (uiState.user?.certificateUrl.isNullOrBlank()) "Upload Certificate" else "Re-upload Certificate")
+                                    }
+                                }
+
+                                OutlinedTextField(
+                                    value = becomeAddress,
+                                    onValueChange = { becomeAddress = it },
+                                    label = { Text("Service address (optional)") },
+                                    shape = RoundedCornerShape(14.dp),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true
+                                )
+                                OutlinedTextField(
+                                    value = becomeCity,
+                                    onValueChange = { becomeCity = it },
+                                    label = { Text("City or area (optional)") },
+                                    shape = RoundedCornerShape(14.dp),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true
+                                )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedButton(
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(14.dp),
+                                        enabled = !isGettingLocation,
+                                        onClick = { useCurrentLocationOnce(true) }
+                                    ) {
+                                        Text("Use current location once")
+                                    }
+                                }
+
+                                GoogleMap(
+                                    modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(16.dp)),
+                                    cameraPositionState = rememberCameraPositionState {
+                                        position = CameraPosition.fromLatLngZoom(becomeMapPoint, 14f)
+                                    },
+                                    onMapClick = ::updateBecomeMapLocation
+                                ) {
+                                    Marker(
+                                        state = MarkerState(position = becomeMapPoint),
+                                        title = "Service Location"
+                                    )
+                                }
+
+                                Text("Service radius: ${becomeRadius.toInt()} km", fontWeight = FontWeight.SemiBold)
+                                Slider(
+                                    value = becomeRadius,
+                                    onValueChange = { becomeRadius = it },
+                                    valueRange = 1f..100f,
+                                    steps = 98
+                                )
+
+                                Text("Service categories * (At least 1 required)", fontWeight = FontWeight.SemiBold)
+                                providerServiceCategories.chunked(2).forEach { rowCategories ->
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        rowCategories.forEach { category ->
+                                            val normalizedCat = ServiceCategories.normalize(category)
+                                            FilterChip(
+                                                selected = normalizedCat in becomeCategories.map { ServiceCategories.normalize(it) },
+                                                onClick = {
+                                                    becomeCategories = if (normalizedCat in becomeCategories.map { ServiceCategories.normalize(it) }) {
+                                                        becomeCategories.filter { ServiceCategories.normalize(it) != normalizedCat }.toSet()
+                                                    } else becomeCategories + normalizedCat
+                                                },
+                                                label = { Text(category) }
+                                            )
+                                        }
+                                    }
+                                }
+                                if (becomeCategories.isEmpty()) {
+                                    Text("Please select at least one service category.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                                }
+
+                                uiState.errorMessage?.let {
+                                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                                }
+                                uiState.successMessage?.let {
+                                    Text(it, color = Color(0xFF10B981), style = MaterialTheme.typography.bodySmall)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        viewModel.becomeServiceProvider(
+                                            phoneNumber = becomePhone,
+                                            serviceAddress = becomeAddress,
+                                            serviceCity = becomeCity,
+                                            latitude = becomeLatitude,
+                                            longitude = becomeLongitude,
+                                            serviceRadiusKm = becomeRadius.toInt(),
+                                            serviceCategories = becomeCategories.toList(),
+                                            certificateUrl = uiState.user?.certificateUrl
+                                        )
+                                    },
+                                    enabled = !uiState.isUpdating && becomeCategories.isNotEmpty(),
+                                    shape = RoundedCornerShape(14.dp),
+                                    modifier = Modifier.fillMaxWidth().height(48.dp)
+                                ) {
+                                    if (uiState.isUpdating) {
+                                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                    } else {
+                                        Text("Save & Become a Provider")
+                                    }
+                                }
+
+                                if (uiState.saved) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Button(
+                                        onClick = { onNavigate("profile/provider") },
+                                        shape = RoundedCornerShape(14.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                                    ) {
+                                        Text("Switch to Provider Dashboard")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (isProvider) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(24.dp),
@@ -497,6 +713,7 @@ fun ProfileScreen(
                                     Text(if (uiState.user?.certificateUrl.isNullOrBlank()) "Upload Certificate" else "Re-upload Certificate")
                                 }
                             }
+
                             OutlinedTextField(
                                 value = address,
                                 onValueChange = { address = it },
@@ -521,21 +738,7 @@ fun ProfileScreen(
                                     modifier = Modifier.weight(1f),
                                     shape = RoundedCornerShape(14.dp),
                                     enabled = !isGettingLocation,
-                                    onClick = {
-                                        val fineGranted = ContextCompat.checkSelfPermission(
-                                            context, Manifest.permission.ACCESS_FINE_LOCATION
-                                        ) == PackageManager.PERMISSION_GRANTED
-                                        val coarseGranted = ContextCompat.checkSelfPermission(
-                                            context, Manifest.permission.ACCESS_COARSE_LOCATION
-                                        ) == PackageManager.PERMISSION_GRANTED
-                                        if (fineGranted || coarseGranted) useCurrentLocationOnce()
-                                        else locationPermissionLauncher.launch(
-                                            arrayOf(
-                                                Manifest.permission.ACCESS_FINE_LOCATION,
-                                                Manifest.permission.ACCESS_COARSE_LOCATION
-                                            )
-                                        )
-                                    }
+                                    onClick = { useCurrentLocationOnce(false) }
                                 ) {
                                     Text(if (isGettingLocation) "Getting location…" else "Use current location once")
                                 }
@@ -575,21 +778,25 @@ fun ProfileScreen(
                                 valueRange = 1f..100f,
                                 steps = 98
                             )
-                            Text("Service categories", fontWeight = FontWeight.SemiBold)
+                            Text("Service categories * (At least 1 required)", fontWeight = FontWeight.SemiBold)
                             providerServiceCategories.chunked(2).forEach { rowCategories ->
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     rowCategories.forEach { category ->
+                                        val normalizedCat = ServiceCategories.normalize(category)
                                         FilterChip(
-                                            selected = category in selectedCategories,
+                                            selected = normalizedCat in selectedCategories.map { ServiceCategories.normalize(it) },
                                             onClick = {
-                                                selectedCategories = if (category in selectedCategories) {
-                                                    selectedCategories - category
-                                                } else selectedCategories + category
+                                                selectedCategories = if (normalizedCat in selectedCategories.map { ServiceCategories.normalize(it) }) {
+                                                    selectedCategories.filter { ServiceCategories.normalize(it) != normalizedCat }.toSet()
+                                                } else selectedCategories + normalizedCat
                                             },
                                             label = { Text(category) }
                                         )
                                     }
                                 }
+                            }
+                            if (selectedCategories.isEmpty()) {
+                                Text("Please select at least one service category.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
@@ -611,13 +818,16 @@ fun ProfileScreen(
                             uiState.errorMessage?.let {
                                 Text(it, color = MaterialTheme.colorScheme.error)
                             }
+                            uiState.successMessage?.let {
+                                Text(it, color = Color(0xFF10B981))
+                            }
                             if (uiState.saved) {
                                 Text("Service profile saved.", color = MaterialTheme.colorScheme.primary)
                             }
                             Button(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(14.dp),
-                                enabled = !uiState.isUpdating && !isGettingLocation,
+                                enabled = !uiState.isUpdating && !isGettingLocation && selectedCategories.isNotEmpty(),
                                 onClick = {
                                     viewModel.saveServiceProfile(
                                         serviceAddress = address,
@@ -684,20 +894,17 @@ fun ProfileScreen(
         if (showSettingsSheet) {
             ModalBottomSheet(
                 onDismissRequest = { showSettingsSheet = false },
-                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
                 containerColor = MaterialTheme.colorScheme.surface
             ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(24.dp)
-                        .navigationBarsPadding(),
+                    modifier = Modifier.fillMaxWidth().padding(24.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
                             text = "⚙️ Settings",
@@ -773,7 +980,7 @@ fun ProfileScreen(
                     Surface(
                         shape = RoundedCornerShape(16.dp),
                         color = Color(0xFFF8FAFC),
-                        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                        border = BorderStroke(1.dp, Color(0xFFF1F5F9)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(
@@ -953,64 +1160,64 @@ private fun ProviderReviewsSection(
             }
 
             if (filteredReviews.isEmpty()) {
-                // Upgraded Empty State View matching mockup
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = Color(0xFFF8FAFC),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
-                    modifier = Modifier.fillMaxWidth()
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(100.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 32.dp, horizontal = 20.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFEFF6FF)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.ChatBubbleOutline,
-                                contentDescription = null,
-                                tint = Color(0xFF2563EB),
-                                modifier = Modifier.size(26.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(14.dp))
-                        Text(
-                            text = if (reviews.isEmpty()) "No customer reviews yet" else "No reviews for $selectedCategory",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1E293B),
-                                fontSize = 16.sp
-                            ),
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Once you complete your service requests, reviews will appear here.",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = Color(0xFF64748B),
-                                fontSize = 13.sp
-                            ),
-                            textAlign = TextAlign.Center
-                        )
-                    }
+                    Text(
+                        text = "No reviews for this category yet.",
+                        style = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFF64748B))
+                    )
                 }
             } else {
-                filteredReviews.forEach { review ->
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(
-                            "${review.serviceCategory} · ${review.rating}/5",
-                            style = MaterialTheme.typography.titleSmall
-                        )
-                        if (review.comment.isNotBlank()) {
-                            Text(review.comment, style = MaterialTheme.typography.bodyMedium)
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    filteredReviews.forEach { review ->
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = Color(0xFFF8FAFC),
+                            border = BorderStroke(1.dp, Color(0xFFF1F5F9)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = review.serviceCategory,
+                                        style = MaterialTheme.typography.titleSmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF2563EB)
+                                        )
+                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.Star,
+                                            contentDescription = null,
+                                            tint = Color(0xFFF59E0B),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "${review.rating}.0",
+                                            style = MaterialTheme.typography.titleSmall.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF1E293B)
+                                            )
+                                        )
+                                    }
+                                }
+                                if (review.comment.isNotBlank()) {
+                                    Text(
+                                        text = review.comment,
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            color = Color(0xFF334155),
+                                            fontSize = 14.sp
+                                        )
+                                    )
+                                }
+                            }
                         }
                     }
                 }
