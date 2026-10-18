@@ -89,6 +89,10 @@ fun ProfileScreen(
     var selectedReviewCategory by remember(providerId) { mutableStateOf("All") }
     var showSettingsSheet by remember { mutableStateOf(false) }
 
+    var editName by remember { mutableStateOf("") }
+    var editPhone by remember { mutableStateOf("") }
+    var isEditingProfile by remember { mutableStateOf(false) }
+
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     var address by remember { mutableStateOf("") }
     var city by remember { mutableStateOf("") }
@@ -100,8 +104,12 @@ fun ProfileScreen(
     var isGettingLocation by remember { mutableStateOf(false) }
     var locationError by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(uiState.user?.uid) {
+    LaunchedEffect(uiState.user) {
         uiState.user?.let { user ->
+            if (!isEditingProfile) {
+                editName = user.name
+                editPhone = user.phoneNumber
+            }
             address = user.serviceAddress
             city = user.serviceCity
             latitude = user.serviceLatitude?.toString().orEmpty()
@@ -348,6 +356,88 @@ fun ProfileScreen(
                                 StatItem(value = "${providerReviews.size}", label = "Reviews")
                                 VerticalDivider(modifier = Modifier.height(28.dp), color = Color(0xFFE2E8F0))
                                 StatItem(value = "★ 5.0", label = "Rating")
+                            }
+                        }
+                    }
+                }
+
+                // PERSONAL INFORMATION EDIT CARD (Name & Phone)
+                Card(
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Personal Information", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                            TextButton(onClick = { isEditingProfile = !isEditingProfile }) {
+                                Text(if (isEditingProfile) "Cancel" else "Edit Profile")
+                            }
+                        }
+
+                        if (isEditingProfile) {
+                            OutlinedTextField(
+                                value = editName,
+                                onValueChange = { editName = it },
+                                label = { Text("Full Name *") },
+                                singleLine = true,
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            OutlinedTextField(
+                                value = editPhone,
+                                onValueChange = { editPhone = it },
+                                label = { Text("Phone Number * (10 digits starting with 0 or +94 format)") },
+                                singleLine = true,
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            uiState.errorMessage?.let {
+                                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                            }
+                            uiState.successMessage?.let {
+                                Text(it, color = Color(0xFF10B981), style = MaterialTheme.typography.bodySmall)
+                            }
+
+                            Button(
+                                onClick = {
+                                    viewModel.updateBasicProfile(editName, editPhone)
+                                },
+                                enabled = !uiState.isUpdatingProfile,
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.fillMaxWidth().height(48.dp)
+                            ) {
+                                if (uiState.isUpdatingProfile) {
+                                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                } else {
+                                    Text("Save Profile")
+                                }
+                            }
+                        } else {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(Icons.Outlined.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                Text("Name: ${uiState.user?.name.orEmpty()}", style = MaterialTheme.typography.bodyMedium)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(Icons.Outlined.Phone, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                Text("Phone: ${uiState.user?.phoneNumber.orEmpty()}", style = MaterialTheme.typography.bodyMedium)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(Icons.Outlined.Email, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                                Text("Email: ${uiState.user?.email.orEmpty()} (Cannot be changed)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            uiState.successMessage?.let {
+                                Text(it, color = Color(0xFF10B981), style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }

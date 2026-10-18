@@ -12,7 +12,9 @@ import lk.ac.nibm.hdse.fixly_20.model.User
 data class ProviderAvailabilityUiState(
     val isLoading: Boolean = true,
     val isUpdating: Boolean = false,
+    val isUpdatingProfile: Boolean = false,
     val errorMessage: String? = null,
+    val successMessage: String? = null,
     val saved: Boolean = false,
     val user: User? = null
 )
@@ -24,6 +26,10 @@ class ProviderAvailabilityViewModel(
     val uiState: StateFlow<ProviderAvailabilityUiState> = _uiState
 
     init {
+        loadUserProfile()
+    }
+
+    fun loadUserProfile() {
         viewModelScope.launch {
             userRepository.getCurrentUserProfile()
                 .onSuccess { user ->
@@ -36,6 +42,54 @@ class ProviderAvailabilityViewModel(
                         it.copy(
                             isLoading = false,
                             errorMessage = error.localizedMessage ?: "Couldn't load your profile."
+                        )
+                    }
+                }
+        }
+    }
+
+    fun updateBasicProfile(name: String, phoneNumber: String) {
+        if (_uiState.value.isUpdatingProfile) return
+        val trimmedName = name.trim()
+        val trimmedPhone = phoneNumber.trim()
+        if (trimmedName.isBlank()) {
+            _uiState.update { it.copy(errorMessage = "Name cannot be blank.") }
+            return
+        }
+        if (!trimmedPhone.matches(Regex("^(0\\d{9}|\\+94\\d{9})$"))) {
+            _uiState.update { it.copy(errorMessage = "Phone number must be 10 digits starting with 0, or in +94 format.") }
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isUpdatingProfile = true, errorMessage = null, successMessage = null) }
+            userRepository.updateBasicProfile(trimmedName, trimmedPhone)
+                .onSuccess {
+                    userRepository.getCurrentUserProfile()
+                        .onSuccess { user ->
+                            _uiState.update {
+                                it.copy(
+                                    user = user,
+                                    isUpdatingProfile = false,
+                                    successMessage = "Profile updated successfully.",
+                                    errorMessage = null
+                                )
+                            }
+                        }
+                        .onFailure { error ->
+                            _uiState.update {
+                                it.copy(
+                                    isUpdatingProfile = false,
+                                    errorMessage = error.localizedMessage ?: "Profile updated, but couldn't refresh."
+                                )
+                            }
+                        }
+                }
+                .onFailure { error ->
+                    _uiState.update {
+                        it.copy(
+                            isUpdatingProfile = false,
+                            errorMessage = error.localizedMessage ?: "Failed to update profile."
                         )
                     }
                 }
@@ -61,7 +115,7 @@ class ProviderAvailabilityViewModel(
             return
         }
         viewModelScope.launch {
-            _uiState.update { it.copy(isUpdating = true, errorMessage = null, saved = false) }
+            _uiState.update { it.copy(isUpdating = true, errorMessage = null, saved = false, successMessage = null) }
             userRepository.saveProviderServiceProfile(
                 serviceAddress = serviceAddress,
                 serviceCity = serviceCity,
@@ -74,7 +128,7 @@ class ProviderAvailabilityViewModel(
                 userRepository.getCurrentUserProfile()
                     .onSuccess { user ->
                         _uiState.update {
-                            it.copy(user = user, isUpdating = false, saved = true)
+                            it.copy(user = user, isUpdating = false, saved = true, successMessage = "Service profile saved successfully.")
                         }
                     }
                     .onFailure { error ->

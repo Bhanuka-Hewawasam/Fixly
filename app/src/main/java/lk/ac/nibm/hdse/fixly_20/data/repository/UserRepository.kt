@@ -25,6 +25,28 @@ class UserRepository(
     private val profileDao: UserProfileDao = AppDatabase.getInstance().userProfileDao()
 ) {
 
+    suspend fun updateBasicProfile(name: String, phoneNumber: String): Result<Unit> = try {
+        val uid = firebaseAuth.currentUser?.uid
+            ?: throw IllegalStateException("Sign in to update your profile.")
+        val trimmedName = name.trim()
+        val trimmedPhone = phoneNumber.trim()
+        require(trimmedName.isNotBlank()) { "Name cannot be blank." }
+        require(trimmedPhone.matches(Regex("^(0\\d{9}|\\+94\\d{9})$"))) {
+            "Phone number must be 10 digits starting with 0, or in +94 format."
+        }
+
+        firestore.collection("users").document(uid)
+            .update(
+                mapOf(
+                    "name" to trimmedName,
+                    "phoneNumber" to trimmedPhone
+                )
+            ).await()
+        Result.success(Unit)
+    } catch (error: Exception) {
+        Result.failure(error)
+    }
+
     suspend fun saveProviderServiceProfile(
         serviceAddress: String,
         serviceCity: String,
