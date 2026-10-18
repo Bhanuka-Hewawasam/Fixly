@@ -14,6 +14,8 @@ import lk.ac.nibm.hdse.fixly_20.model.JobPost
 import lk.ac.nibm.hdse.fixly_20.model.ProviderRatingAggregate
 import lk.ac.nibm.hdse.fixly_20.model.ServiceRatingPolicy
 import lk.ac.nibm.hdse.fixly_20.model.User
+import lk.ac.nibm.hdse.fixly_20.util.findOverlappingActiveJob
+import lk.ac.nibm.hdse.fixly_20.util.jobTimeConflictMessage
 
 class BidRepository(
     private val firebaseAuth: FirebaseAuth = FirebaseAuth.getInstance(),
@@ -49,6 +51,18 @@ class BidRepository(
                 ?: return Result.failure(IllegalStateException("Job not found"))
             if (job.customerId == providerId) {
                 return Result.failure(IllegalStateException("You can't bid on your own job."))
+            }
+            if (!job.isEmergency) {
+                val activeJobs = firestore.collection("jobPosts")
+                    .whereEqualTo("assignedProviderId", providerId)
+                    .whereIn("status", listOf("Accepted", "In Progress"))
+                    .get()
+                    .await()
+                    .toObjects(JobPost::class.java)
+                val timeConflict = findOverlappingActiveJob(job, activeJobs)
+                if (timeConflict != null) {
+                    return Result.failure(IllegalStateException(jobTimeConflictMessage(timeConflict)))
+                }
             }
 
             val bidRef = firestore.collection("jobPosts").document(jobId).collection("bids").document(providerId)

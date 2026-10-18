@@ -41,6 +41,7 @@ import lk.ac.nibm.hdse.fixly_20.model.JobPost
 import lk.ac.nibm.hdse.fixly_20.ui.components.BottomNavItem
 import lk.ac.nibm.hdse.fixly_20.ui.components.FixlyBottomNavBar
 import lk.ac.nibm.hdse.fixly_20.ui.components.getCategoryVectorIcon
+import lk.ac.nibm.hdse.fixly_20.util.jobTimeConflictMessage
 import lk.ac.nibm.hdse.fixly_20.viewmodel.AvailableJobsViewModel
 
 private val radiusOptionsKm = listOf(10, 25, 50, 100)
@@ -276,6 +277,15 @@ fun AvailableJobsScreen(
                         }
                     }
 
+                    uiState.activeProviderJobsError?.let { error ->
+                        Text(
+                            text = error,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+                        )
+                    }
+
                     if (uiState.visibleJobs.isEmpty()) {
                         Box(
                             modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -296,6 +306,9 @@ fun AvailableJobsScreen(
                                 JobCard(
                                     job = item.job,
                                     distanceKm = item.distanceKm,
+                                    timeConflict = viewModel.timeConflictFor(item.job),
+                                    isCheckingAvailability = uiState.isLoadingActiveProviderJobs ||
+                                        uiState.activeProviderJobsError != null,
                                     onPlaceBid = { selectedJob = item.job }
                                 )
                             }
@@ -311,6 +324,9 @@ fun AvailableJobsScreen(
             job = job,
             distanceKm = uiState.visibleJobs.firstOrNull { it.job.jobId == job.jobId }?.distanceKm,
             isSubmitting = uiState.isSubmittingBid,
+            isCheckingAvailability = uiState.isLoadingActiveProviderJobs,
+            timeConflict = viewModel.timeConflictFor(job),
+            availabilityError = uiState.activeProviderJobsError,
             errorMessage = uiState.errorMessage,
             onDismiss = { if (!uiState.isSubmittingBid) selectedJob = null },
             onSubmit = { price, message, etaMinutes ->
@@ -322,7 +338,13 @@ fun AvailableJobsScreen(
 }
 
 @Composable
-private fun JobCard(job: JobPost, distanceKm: Double, onPlaceBid: () -> Unit) {
+private fun JobCard(
+    job: JobPost,
+    distanceKm: Double,
+    timeConflict: JobPost?,
+    isCheckingAvailability: Boolean,
+    onPlaceBid: () -> Unit
+) {
     val distanceText = String.format(java.util.Locale.getDefault(), "%.1f", distanceKm)
     val categoryIcon = getCategoryVectorIcon(job.category)
 
@@ -593,9 +615,18 @@ private fun JobCard(job: JobPost, distanceKm: Double, onPlaceBid: () -> Unit) {
                 }
             }
 
+            timeConflict?.let {
+                Text(
+                    jobTimeConflictMessage(it),
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
             // Place Bid Button
             Button(
                 onClick = onPlaceBid,
+                enabled = !isCheckingAvailability && timeConflict == null,
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
                 modifier = Modifier.fillMaxWidth().height(48.dp)
@@ -616,6 +647,9 @@ private fun BidDialog(
     job: JobPost,
     distanceKm: Double?,
     isSubmitting: Boolean,
+    isCheckingAvailability: Boolean,
+    timeConflict: JobPost?,
+    availabilityError: String?,
     errorMessage: String?,
     onDismiss: () -> Unit,
     onSubmit: (price: Double, message: String, estimatedArrivalMinutes: Int?) -> Unit
@@ -685,7 +719,7 @@ private fun BidDialog(
                     },
                     modifier = Modifier.fillMaxWidth()
                 )
-                errorMessage?.let {
+                (timeConflict?.let(::jobTimeConflictMessage) ?: availabilityError ?: errorMessage)?.let {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
@@ -699,7 +733,8 @@ private fun BidDialog(
                     }
                 },
                 shape = RoundedCornerShape(16.dp),
-                enabled = !isSubmitting && priceValue != null && priceValue > 0.0 && etaIsValid,
+                enabled = !isSubmitting && !isCheckingAvailability && timeConflict == null &&
+                    availabilityError == null && priceValue != null && priceValue > 0.0 && etaIsValid,
                 modifier = Modifier.fillMaxWidth().height(52.dp)
             ) {
                 if (isSubmitting) {

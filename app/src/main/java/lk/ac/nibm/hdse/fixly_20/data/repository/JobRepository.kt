@@ -154,6 +154,21 @@ class JobRepository(
         awaitClose { listener.remove() }
     }
 
+    suspend fun getActiveProviderJobs(): Result<List<JobPost>> {
+        return try {
+            val providerId = firebaseAuth.currentUser?.uid
+                ?: return Result.failure(IllegalStateException("No logged-in user"))
+            val snapshot = firestore.collection("jobPosts")
+                .whereEqualTo("assignedProviderId", providerId)
+                .whereIn("status", listOf("Accepted", "In Progress"))
+                .get()
+                .await()
+            Result.success(snapshot.toObjects(JobPost::class.java))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun updateProviderLocation(jobId: String, location: GeoPoint): Result<Unit> {
         return try {
             firestore.collection("jobPosts").document(jobId)

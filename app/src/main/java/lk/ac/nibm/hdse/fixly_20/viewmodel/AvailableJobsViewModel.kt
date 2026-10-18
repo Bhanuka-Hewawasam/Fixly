@@ -12,6 +12,8 @@ import lk.ac.nibm.hdse.fixly_20.data.repository.JobRepository
 import lk.ac.nibm.hdse.fixly_20.data.repository.UserRepository
 import lk.ac.nibm.hdse.fixly_20.model.JobPost
 import lk.ac.nibm.hdse.fixly_20.util.DistanceUtils
+import lk.ac.nibm.hdse.fixly_20.util.findOverlappingActiveJob
+import lk.ac.nibm.hdse.fixly_20.util.jobTimeConflictMessage
 
 data class JobWithDistance(
     val job: JobPost,
@@ -24,6 +26,9 @@ data class AvailableJobsUiState(
     val providerLocation: GeoPoint? = null,            // provider's current GPS position
     val radiusKm: Int = 25,                            // how far the provider is willing to travel
     val visibleJobs: List<JobWithDistance> = emptyList(), // allJobs after the distance filter, nearest first
+    val activeProviderJobs: List<JobPost> = emptyList(),
+    val isLoadingActiveProviderJobs: Boolean = true,
+    val activeProviderJobsError: String? = null,
     val errorMessage: String? = null,
     val isSubmittingBid: Boolean = false,
     val bidSubmittedJobId: String? = null
@@ -39,6 +44,23 @@ class AvailableJobsViewModel(
     val uiState: StateFlow<AvailableJobsUiState> = _uiState
 
     init {
+        viewModelScope.launch {
+            jobRepository.getActiveProviderJobs()
+                .onSuccess { jobs ->
+                    _uiState.update {
+                        it.copy(activeProviderJobs = jobs, isLoadingActiveProviderJobs = false)
+                    }
+                }
+                .onFailure { exception ->
+                    _uiState.update {
+                        it.copy(
+                            isLoadingActiveProviderJobs = false,
+                            activeProviderJobsError = exception.localizedMessage
+                                ?: "Could not check your existing bookings."
+                        )
+                    }
+                }
+        }
         viewModelScope.launch {
             // 1) Category filter happens in Firestore (provider only sees their own trades)
             val myCategories = userRepository.getCurrentUserProfile().getOrNull()?.serviceCategories ?: emptyList()
@@ -56,6 +78,9 @@ class AvailableJobsViewModel(
     fun setRadius(km: Int) {
         _uiState.update { applyDistanceFilter(it.copy(radiusKm = km)) }
     }
+
+    fun timeConflictFor(job: JobPost): JobPost? =
+        findOverlappingActiveJob(job, _uiState.value.activeProviderJobs)
 
     /**
      * 2) Distance filter happens on the device: Firestore can't do "within X km" queries natively,
@@ -97,13 +122,26 @@ class AvailableJobsViewModel(
             _uiState.update { it.copy(errorMessage = "ETA must be between 1 and 1440 minutes.") }
             return
         }
+        val currentState = _uiState.value
+        if (currentState.isLoadingActiveProviderJobs || currentState.activeProviderJobsError != null) {
+            _uiState.update {
+                it.copy(errorMessage = it.activeProviderJobsError ?: "Checking your existing bookings. Please try again.")
+            }
+            return
+        }
+        val candidateJob = currentState.allJobs.firstOrNull { it.jobId == jobId }
+        val timeConflict = candidateJob?.let(::timeConflictFor)
+        if (timeConflict != null) {
+            _uiState.update { it.copy(errorMessage = jobTimeConflictMessage(timeConflict)) }
+            return
+        }
 
         viewModelScope.launch {
             _uiState.update { it.copy(isSubmittingBid = true, errorMessage = null) }
 
-            val currentState = _uiState.value
-            val jobLocation = currentState.allJobs.firstOrNull { it.jobId == jobId }?.location
-            val providerLocation = currentState.providerLocation
+            val latestState = _uiState.value
+            val jobLocation = latestState.allJobs.firstOrNull { it.jobId == jobId }?.location
+            val providerLocation = latestState.providerLocation
             if (jobLocation == null || providerLocation == null) {
                 _uiState.update {
                     it.copy(
