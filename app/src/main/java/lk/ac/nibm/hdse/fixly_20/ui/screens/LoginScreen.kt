@@ -1,6 +1,7 @@
 package lk.ac.nibm.hdse.fixly_20.ui.screens
 
 import android.app.Activity
+import android.os.SystemClock
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -42,6 +43,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
+import kotlinx.coroutines.delay
 import lk.ac.nibm.hdse.fixly_20.ui.components.FixlyLogo
 import lk.ac.nibm.hdse.fixly_20.ui.components.GoogleIcon
 import lk.ac.nibm.hdse.fixly_20.ui.components.LogoSize
@@ -60,8 +62,20 @@ fun LoginScreen(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+    var showForgotPassword by remember { mutableStateOf(false) }
+    var resetEmail by remember { mutableStateOf("") }
+    var passwordResetSecondsRemaining by remember { mutableIntStateOf(0) }
 
     val uiState by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(uiState.passwordResetCooldownUntil) {
+        while (true) {
+            val remainingMillis = uiState.passwordResetCooldownUntil - SystemClock.elapsedRealtime()
+            passwordResetSecondsRemaining = ((remainingMillis + 999L) / 1000L).toInt().coerceAtLeast(0)
+            if (remainingMillis <= 0L) break
+            delay(250L)
+        }
+    }
 
     // Google Sign-In client setup using the exact Firebase Web Client ID
     val googleSignInClient: GoogleSignInClient = remember {
@@ -224,6 +238,21 @@ fun LoginScreen(
                 ),
                 modifier = Modifier.fillMaxWidth()
             )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(
+                    onClick = {
+                        resetEmail = email
+                        viewModel.clearPasswordResetResult()
+                        showForgotPassword = true
+                    }
+                ) {
+                    Text("Forgot password?")
+                }
+            }
 
             // 3. ERROR MESSAGES IN A STYLISH CARD
             val activeError = uiState.errorMessage ?: googleError
@@ -399,5 +428,93 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
         }
+    }
+
+    if (showForgotPassword) {
+        val resetSucceeded = uiState.passwordResetMessage != null
+        AlertDialog(
+            onDismissRequest = {
+                if (!resetSucceeded) showForgotPassword = false
+            },
+            title = { Text("Reset password") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = resetEmail,
+                        onValueChange = {
+                            resetEmail = it
+                            if (uiState.passwordResetError != null) viewModel.clearPasswordResetResult()
+                        },
+                        enabled = !uiState.isPasswordResetLoading && !resetSucceeded,
+                        label = { Text("Email address") },
+                        placeholder = { Text("name@example.com") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Email,
+                            imeAction = ImeAction.Done
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    uiState.passwordResetError?.let { error ->
+                        Text(
+                            text = error,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                    uiState.passwordResetMessage?.let { message ->
+                        Text(
+                            text = message,
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (resetSucceeded && passwordResetSecondsRemaining > 0) {
+                        TextButton(onClick = {}, enabled = false) {
+                            Text("Wait ${passwordResetSecondsRemaining}s")
+                        }
+                    } else if (!resetSucceeded) {
+                        TextButton(
+                            onClick = { viewModel.sendPasswordResetEmail(resetEmail) },
+                            enabled = !uiState.isPasswordResetLoading && passwordResetSecondsRemaining == 0
+                        ) {
+                            when {
+                                uiState.isPasswordResetLoading -> CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                passwordResetSecondsRemaining > 0 -> Text("Wait ${passwordResetSecondsRemaining}s")
+                                else -> Text("Send reset link")
+                            }
+                        }
+                    }
+                    if (resetSucceeded) {
+                        TextButton(
+                            onClick = {
+                                viewModel.clearPasswordResetResult()
+                                showForgotPassword = false
+                            }
+                        ) {
+                            Text("OK")
+                        }
+                    }
+                }
+            },
+            dismissButton = if (resetSucceeded) null else ({
+                TextButton(
+                    onClick = { showForgotPassword = false },
+                    enabled = !uiState.isPasswordResetLoading
+                ) {
+                    Text("Cancel")
+                }
+            })
+        )
     }
 }

@@ -2,6 +2,8 @@ package lk.ac.nibm.hdse.fixly_20.viewmodel
 
 import android.content.Context
 import android.net.Uri
+import android.os.SystemClock
+import android.util.Patterns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,7 +17,11 @@ data class AuthUiState(
     val isLoginSuccessful: Boolean = false,
     val isRegisterSuccessful: Boolean = false,
     val needsProfileCompletion: Boolean = false, // true = new Google user, must pick role/category
-    val isProfileCompletionSuccessful: Boolean = false
+    val isProfileCompletionSuccessful: Boolean = false,
+    val isPasswordResetLoading: Boolean = false,
+    val passwordResetMessage: String? = null,
+    val passwordResetError: String? = null,
+    val passwordResetCooldownUntil: Long = 0L
 )
 
 class AuthViewModel(
@@ -44,6 +50,52 @@ class AuthViewModel(
                     )
                 }
         }
+    }
+
+    fun sendPasswordResetEmail(email: String) {
+        val normalizedEmail = email.trim()
+        if (normalizedEmail.isBlank() || !Patterns.EMAIL_ADDRESS.matcher(normalizedEmail).matches()) {
+            _uiState.value = _uiState.value.copy(
+                passwordResetMessage = null,
+                passwordResetError = "Enter a valid email address"
+            )
+            return
+        }
+
+        if (_uiState.value.isPasswordResetLoading ||
+            SystemClock.elapsedRealtime() < _uiState.value.passwordResetCooldownUntil
+        ) return
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isPasswordResetLoading = true,
+                passwordResetMessage = null,
+                passwordResetError = null
+            )
+            repository.sendPasswordResetEmail(normalizedEmail)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        isPasswordResetLoading = false,
+                        passwordResetMessage = "If an account exists for this email, a reset link has been sent.",
+                        passwordResetError = null,
+                        passwordResetCooldownUntil = SystemClock.elapsedRealtime() + 30_000L
+                    )
+                }
+                .onFailure {
+                    _uiState.value = _uiState.value.copy(
+                        isPasswordResetLoading = false,
+                        passwordResetMessage = null,
+                        passwordResetError = "Check your internet connection and try again"
+                    )
+                }
+        }
+    }
+
+    fun clearPasswordResetResult() {
+        _uiState.value = _uiState.value.copy(
+            passwordResetMessage = null,
+            passwordResetError = null
+        )
     }
 
     fun register(
