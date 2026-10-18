@@ -18,8 +18,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.Send
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -36,7 +37,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.SubcomposeAsyncImage
@@ -49,6 +49,7 @@ import lk.ac.nibm.hdse.fixly_20.ui.components.FixlyBottomNavBar
 import lk.ac.nibm.hdse.fixly_20.ui.components.getCategoryVectorIcon
 import lk.ac.nibm.hdse.fixly_20.util.jobTimeConflictMessage
 import lk.ac.nibm.hdse.fixly_20.viewmodel.AvailableJobsViewModel
+import java.util.Locale
 
 private val radiusOptionsKm = listOf(10, 25, 50, 100)
 
@@ -65,7 +66,7 @@ fun AvailableJobsScreen(
 
     val uiState by viewModel.uiState.collectAsState()
     var selectedJob by remember { mutableStateOf<JobPost?>(null) }
-    var previewImageUrl by remember { mutableStateOf<String?>(null) }
+    var selectedImageUrl by remember { mutableStateOf<String?>(null) }
     var isLocating by remember { mutableStateOf(false) }
     var locationFailed by remember { mutableStateOf(false) }
 
@@ -284,15 +285,6 @@ fun AvailableJobsScreen(
                         }
                     }
 
-                    uiState.activeProviderJobsError?.let { error ->
-                        Text(
-                            text = error,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
-                        )
-                    }
-
                     if (uiState.visibleJobs.isEmpty()) {
                         Box(
                             modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -313,11 +305,7 @@ fun AvailableJobsScreen(
                                 JobCard(
                                     job = item.job,
                                     distanceKm = item.distanceKm,
-                                    timeConflict = viewModel.timeConflictFor(item.job),
-                                    isCheckingAvailability = uiState.isLoadingActiveProviderJobs ||
-                                        uiState.activeProviderJobsError != null,
-                                    onPlaceBid = { selectedJob = item.job },
-                                    onImageClick = { previewImageUrl = it }
+                                    onPlaceBid = { selectedJob = item.job }
                                 )
                             }
                         }
@@ -332,72 +320,39 @@ fun AvailableJobsScreen(
             job = job,
             distanceKm = uiState.visibleJobs.firstOrNull { it.job.jobId == job.jobId }?.distanceKm,
             isSubmitting = uiState.isSubmittingBid,
-            isCheckingAvailability = uiState.isLoadingActiveProviderJobs,
             timeConflict = viewModel.timeConflictFor(job),
-            availabilityError = uiState.activeProviderJobsError,
             errorMessage = uiState.errorMessage,
             onDismiss = { if (!uiState.isSubmittingBid) selectedJob = null },
             onSubmit = { price, message, etaMinutes ->
                 viewModel.submitBid(job.jobId, price, message, etaMinutes)
             },
-            onImageClick = { previewImageUrl = it }
+            onImageClick = { url -> selectedImageUrl = url }
         )
     }
 
-    previewImageUrl?.let { url ->
-        Dialog(
-            onDismissRequest = { previewImageUrl = null },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = Color.Black
-            ) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    SubcomposeAsyncImage(
-                        model = url,
-                        contentDescription = "Full screen preview",
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clickable { previewImageUrl = null },
-                        loading = {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(color = Color.White)
-                            }
-                        },
-                        error = {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("Failed to load image", color = Color.White)
-                            }
-                        }
-                    )
-                    IconButton(
-                        onClick = { previewImageUrl = null },
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(16.dp)
-                            .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = "Close preview", tint = Color.White)
-                    }
+    selectedImageUrl?.let { imageUrl ->
+        AlertDialog(
+            onDismissRequest = { selectedImageUrl = null },
+            confirmButton = {
+                TextButton(onClick = { selectedImageUrl = null }) {
+                    Text("Close")
                 }
+            },
+            text = {
+                SubcomposeAsyncImage(
+                    model = imageUrl,
+                    contentDescription = "Zoomed image",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxWidth().height(350.dp).clip(RoundedCornerShape(12.dp))
+                )
             }
-        }
+        )
     }
-
 }
 
 @Composable
-private fun JobCard(
-    job: JobPost,
-    distanceKm: Double,
-    timeConflict: JobPost?,
-    isCheckingAvailability: Boolean,
-    onPlaceBid: () -> Unit,
-    onImageClick: (String) -> Unit
-) {
-    val distanceText = String.format(java.util.Locale.getDefault(), "%.1f", distanceKm)
+private fun JobCard(job: JobPost, distanceKm: Double, onPlaceBid: () -> Unit) {
+    val distanceText = String.format(Locale.getDefault(), "%.1f", distanceKm)
     val categoryIcon = getCategoryVectorIcon(job.category)
 
     val statusContainerColor = if (job.isEmergency) Color(0xFFFEF3C7) else Color(0xFFEFF6FF)
@@ -487,48 +442,6 @@ private fun JobCard(
                                 fontSize = 11.5.sp
                             )
                         )
-                    }
-                }
-            }
-
-            // Job Image Thumbnail (if any)
-            job.imageUrls.firstOrNull()?.takeIf { it.isNotBlank() }?.let { imageUrl ->
-                Box(
-                    modifier = Modifier
-                        .size(72.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .clickable { onImageClick(imageUrl) }
-                ) {
-                    SubcomposeAsyncImage(
-                        model = imageUrl,
-                        contentDescription = "Job image thumbnail",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                        loading = {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                            }
-                        },
-                        error = {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Icon(Icons.Outlined.BrokenImage, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.error)
-                            }
-                        }
-                    )
-                    if (job.imageUrls.size > 1) {
-                        Surface(
-                            color = Color.Black.copy(alpha = 0.6f),
-                            shape = RoundedCornerShape(bottomStart = 8.dp),
-                            modifier = Modifier.align(Alignment.TopEnd)
-                        ) {
-                            Text(
-                                text = "+${job.imageUrls.size - 1}",
-                                color = Color.White,
-                                style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                            )
-                        }
                     }
                 }
             }
@@ -709,18 +622,9 @@ private fun JobCard(
                 }
             }
 
-            timeConflict?.let {
-                Text(
-                    jobTimeConflictMessage(it),
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-
             // Place Bid Button
             Button(
                 onClick = onPlaceBid,
-                enabled = !isCheckingAvailability && timeConflict == null,
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
                 modifier = Modifier.fillMaxWidth().height(48.dp)
@@ -741,9 +645,7 @@ private fun BidDialog(
     job: JobPost,
     distanceKm: Double?,
     isSubmitting: Boolean,
-    isCheckingAvailability: Boolean,
     timeConflict: JobPost?,
-    availabilityError: String?,
     errorMessage: String?,
     onDismiss: () -> Unit,
     onSubmit: (price: Double, message: String, estimatedArrivalMinutes: Int?) -> Unit,
@@ -756,69 +658,204 @@ private fun BidDialog(
     val etaValue = etaMinutes.toIntOrNull()
     val etaIsValid = etaMinutes.isBlank() || (etaValue != null && etaValue in 1..1440)
 
-    AlertDialog(
-        onDismissRequest = { if (!isSubmitting) onDismiss() },
-        shape = RoundedCornerShape(24.dp),
-        title = { Text(job.category, fontWeight = FontWeight.Bold) },
-        text = {
+    Dialog(onDismissRequest = { if (!isSubmitting) onDismiss() }) {
+        Card(
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Column(
                 modifier = Modifier
-                    .heightIn(max = 520.dp)
+                    .padding(20.dp)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                job.imageUrls.firstOrNull()?.takeIf { it.isNotBlank() }?.let { imageUrl ->
+                // Top header row: ACTIVE JOB badge + Close X button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = Color(0xFFEFF6FF)
+                    ) {
+                        Text(
+                            text = "ACTIVE JOB",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF2563EB),
+                                fontSize = 11.sp
+                            ),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onDismiss,
+                        enabled = !isSubmitting,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = Color(0xFF64748B),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+
+                // Title: Blue dot + Category Name
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(140.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .clickable { onImageClick(imageUrl) }
+                            .size(9.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF2563EB))
                     ) {
-                        SubcomposeAsyncImage(
-                            model = imageUrl,
-                            contentDescription = "Job image",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                            loading = {
-                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                                }
-                            },
-                            error = {
-                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Outlined.BrokenImage, contentDescription = null, modifier = Modifier.size(28.dp), tint = MaterialTheme.colorScheme.error)
+                        Box(
+                            modifier = Modifier
+                                .size(3.5.dp)
+                                .clip(CircleShape)
+                                .background(Color.White)
+                                .align(Alignment.Center)
+                        )
+                    }
+                    Text(
+                        text = job.category,
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp,
+                            color = Color(0xFF0F172A)
+                        )
+                    )
+                }
+
+                // Job Details Box
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = Color(0xFFF8FAFC),
+                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        job.imageUrls.firstOrNull()?.takeIf { it.isNotBlank() }?.let { imageUrl ->
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(130.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .clickable { onImageClick(imageUrl) }
+                            ) {
+                                SubcomposeAsyncImage(
+                                    model = imageUrl,
+                                    contentDescription = "Job image",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
+                                    loading = {
+                                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                        }
+                                    },
+                                    error = {
+                                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                            Icon(Icons.Outlined.BrokenImage, contentDescription = null, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.error)
+                                        }
+                                    }
+                                )
+                                if (job.imageUrls.size > 1) {
+                                    Surface(
+                                        color = Color.Black.copy(alpha = 0.6f),
+                                        shape = RoundedCornerShape(bottomStart = 8.dp),
+                                        modifier = Modifier.align(Alignment.TopEnd)
+                                    ) {
+                                        Text(
+                                            text = "+${job.imageUrls.size - 1} more",
+                                            color = Color.White,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
                                 }
                             }
-                        )
-                        if (job.imageUrls.size > 1) {
-                            Surface(
-                                color = Color.Black.copy(alpha = 0.6f),
-                                shape = RoundedCornerShape(bottomStart = 10.dp),
-                                modifier = Modifier.align(Alignment.TopEnd)
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Handyman,
+                                contentDescription = null,
+                                tint = Color(0xFF2563EB),
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Text(
+                                text = job.description,
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFF334155),
+                                    fontSize = 13.sp
+                                ),
+                                maxLines = 3
+                            )
+                        }
+
+                        if (job.preferredDate.isNotBlank() || job.preferredTime.isNotBlank()) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Schedule,
+                                    contentDescription = null,
+                                    tint = Color(0xFF64748B),
+                                    modifier = Modifier.size(14.dp)
+                                )
                                 Text(
-                                    text = "+${job.imageUrls.size - 1} more",
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                    text = "Preferred: ${job.preferredDate} ${job.preferredTime}",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = Color(0xFF64748B),
+                                        fontSize = 11.5.sp
+                                    )
+                                )
+                            }
+                        }
+
+                        distanceKm?.let { dist ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.LocationOn,
+                                    contentDescription = null,
+                                    tint = Color(0xFF64748B),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "Distance: ${String.format(Locale.getDefault(), "%.1f", dist)} km",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = Color(0xFF64748B),
+                                        fontSize = 11.5.sp
+                                    )
                                 )
                             }
                         }
                     }
                 }
-                Text(job.description, style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    "Preferred: ${job.preferredDate} ${job.preferredTime}",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                distanceKm?.let {
-                    Text(
-                        "Distance: ${String.format(java.util.Locale.getDefault(), "%.1f", it)} km",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
+
+                // Price Input
                 OutlinedTextField(
                     value = price,
                     onValueChange = { value ->
@@ -829,59 +866,116 @@ private fun BidDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
                     enabled = !isSubmitting,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFF2563EB),
+                        unfocusedBorderColor = Color(0xFFCBD5E1),
+                        focusedContainerColor = Color(0xFFF8FAFC),
+                        unfocusedContainerColor = Color(0xFFF8FAFC)
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                // Message Input
                 OutlinedTextField(
                     value = message,
                     onValueChange = { message = it },
                     label = { Text("Message (optional)") },
                     shape = RoundedCornerShape(14.dp),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFF2563EB),
+                        unfocusedBorderColor = Color(0xFFCBD5E1),
+                        focusedContainerColor = Color(0xFFF8FAFC),
+                        unfocusedContainerColor = Color(0xFFF8FAFC)
+                    ),
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !isSubmitting
                 )
+
+                // ETA Input
                 OutlinedTextField(
                     value = etaMinutes,
                     onValueChange = { value ->
                         if (value.all(Char::isDigit)) etaMinutes = value
                     },
                     label = { Text("Estimated arrival (minutes, optional)") },
+                    placeholder = { Text("e.g. 15") },
                     shape = RoundedCornerShape(14.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
                     enabled = !isSubmitting,
                     isError = !etaIsValid,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFF2563EB),
+                        unfocusedBorderColor = Color(0xFFCBD5E1),
+                        focusedContainerColor = Color(0xFFF8FAFC),
+                        unfocusedContainerColor = Color(0xFFF8FAFC)
+                    ),
                     supportingText = {
-                        if (!etaIsValid) Text("Enter a value from 1 to 1440 minutes.")
+                        if (!etaIsValid) Text("Enter 1 to 1440 mins.")
                     },
                     modifier = Modifier.fillMaxWidth()
                 )
-                (timeConflict?.let(::jobTimeConflictMessage) ?: availabilityError ?: errorMessage)?.let {
-                    Spacer(modifier = Modifier.height(8.dp))
+
+                (timeConflict?.let(::jobTimeConflictMessage) ?: errorMessage)?.let {
                     Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    if (priceValue != null && priceValue > 0.0 && etaIsValid) {
-                        onSubmit(priceValue, message, etaValue)
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                // Place Bid Button
+                Button(
+                    onClick = {
+                        if (priceValue != null && priceValue > 0.0 && etaIsValid) {
+                            onSubmit(priceValue, message, etaValue)
+                        }
+                    },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                    enabled = !isSubmitting && timeConflict == null &&
+                        priceValue != null && priceValue > 0.0 && etaIsValid,
+                    modifier = Modifier.fillMaxWidth().height(50.dp)
+                ) {
+                    if (isSubmitting) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                "Place Bid",
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
                     }
-                },
-                shape = RoundedCornerShape(16.dp),
-                enabled = !isSubmitting && !isCheckingAvailability && timeConflict == null &&
-                    availabilityError == null && priceValue != null && priceValue > 0.0 && etaIsValid,
-                modifier = Modifier.fillMaxWidth().height(52.dp)
-            ) {
-                if (isSubmitting) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                } else {
-                    Text("Place Bid", fontWeight = FontWeight.Bold)
+                }
+
+                // Cancel Button
+                TextButton(
+                    onClick = onDismiss,
+                    enabled = !isSubmitting,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        "Cancel",
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF2563EB)
+                        )
+                    )
                 }
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !isSubmitting) { Text("Cancel") }
         }
-    )
+    }
 }
