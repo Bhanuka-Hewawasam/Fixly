@@ -21,12 +21,17 @@ object EmergencyProviderMatcher {
     ): List<ProviderMatch> {
         val normalizedCategory = when (category) {
             "Any", "Any Available Provider" -> null
-            "Vehicle Mechanic" -> listOf("Vehicle Mechanic", "Mechanic")
-            "Electrician" -> listOf("Electrician", "Electrical")
-            "Plumber" -> listOf("Plumber", "Plumbing")
-            "AC Technician" -> listOf("AC Technician", "AC Repair")
-            "Computer Technician" -> listOf("Computer Technician", "Computer Repair")
-            else -> listOf(category)
+            else -> {
+                val canonical = ServiceCategories.normalize(category)
+                when (canonical) {
+                    "Vehicle Mechanic" -> listOf("Vehicle Mechanic", "Mechanic")
+                    "Electrical" -> listOf("Electrician", "Electrical")
+                    "Plumbing" -> listOf("Plumber", "Plumbing")
+                    "AC Repair" -> listOf("AC Technician", "AC Repair")
+                    "Computer Technician" -> listOf("Computer Technician", "Computer Repair")
+                    else -> listOf(canonical)
+                }
+            }
         }
         val maxDistance = minOf(radiusKm.toDouble(), MAX_PROVIDER_DISTANCE_KM)
 
@@ -39,8 +44,9 @@ object EmergencyProviderMatcher {
                 provider.suspended
             ) return@mapNotNull null
 
+            val normalizedProviderCategories = provider.serviceCategories.map { ServiceCategories.normalize(it) }
             if (normalizedCategory != null &&
-                provider.serviceCategories.none { it in normalizedCategory }
+                normalizedProviderCategories.none { it in normalizedCategory.map { c -> ServiceCategories.normalize(c) } }
             ) return@mapNotNull null
 
             val latitude = provider.serviceLatitude ?: return@mapNotNull null
@@ -67,7 +73,7 @@ object EmergencyProviderMatcher {
                     if (category == "Any" || category == "Any Available Provider") {
                         it.provider.averageRating
                     }
-                    else it.provider.ratingForCategory(category).averageRating
+                    else it.provider.ratingForCategory(ServiceCategories.normalize(category)).averageRating
                 }
                 .thenByDescending { it.provider.isVerified }
         )

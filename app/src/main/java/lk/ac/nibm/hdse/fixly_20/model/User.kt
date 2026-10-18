@@ -2,6 +2,7 @@ package lk.ac.nibm.hdse.fixly_20.model
 
 import com.google.firebase.firestore.Exclude
 import com.google.firebase.firestore.PropertyName
+import lk.ac.nibm.hdse.fixly_20.util.ServiceCategories
 
 enum class AccountType { CUSTOMER, PROVIDER }
 
@@ -39,7 +40,13 @@ data class User(
     val averageRating: Double
         get() = if (ratingCount > 0) ratingSum / ratingCount else 0.0
 
-    fun ratingForCategory(category: String): ServiceRating =
-        serviceRatings.entries.firstOrNull { it.key.equals(category, ignoreCase = true) }?.value
-            ?: ServiceRating()
+    fun ratingForCategory(category: String): ServiceRating {
+        val normalized = ServiceCategories.normalize(category)
+        val entry = serviceRatings.entries.firstOrNull {
+            it.key.equals(category, ignoreCase = true) ||
+            it.key.equals(normalized, ignoreCase = true) ||
+            ServiceCategories.normalize(it.key).equals(normalized, ignoreCase = true)
+        }
+        return entry?.value ?: ServiceRating()
+    }
 }

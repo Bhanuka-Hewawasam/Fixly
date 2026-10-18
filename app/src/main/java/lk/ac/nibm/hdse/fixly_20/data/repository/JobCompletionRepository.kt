@@ -153,7 +153,7 @@ class JobCompletionRepository(
             val data = rawRating as? Map<*, *> ?: return@mapNotNull null
             val average = (data["averageRating"] as? Number)?.toDouble() ?: return@mapNotNull null
             val count = (data["reviewCount"] as? Number)?.toInt() ?: return@mapNotNull null
-            (category as? String)?.let { it to ServiceRating(average, count) }
+            (category as? String)?.let { lk.ac.nibm.hdse.fixly_20.util.ServiceCategories.normalize(it) to ServiceRating(average, count) }
         }.toMap()
 
     /**

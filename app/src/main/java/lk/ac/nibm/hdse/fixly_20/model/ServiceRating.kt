@@ -1,5 +1,7 @@
 package lk.ac.nibm.hdse.fixly_20.model
 
+import lk.ac.nibm.hdse.fixly_20.util.ServiceCategories
+
 data class ServiceRating(
     val averageRating: Double = 0.0,
     val reviewCount: Int = 0
@@ -28,13 +30,16 @@ object ServiceRatingPolicy {
     fun bookingLockId(customerId: String, providerId: String, category: String): String {
         require(customerId.isNotBlank() && providerId.isNotBlank())
         require(category.isNotBlank() && '/' !in category)
-        return "${customerId}__${providerId}__${category}"
+        val normalizedCategory = ServiceCategories.normalize(category)
+        return "${customerId}__${providerId}__${normalizedCategory}"
     }
 
     fun nextByCategory(
         current: Map<String, ServiceRating>,
         category: String,
         rating: Int
-    ): Map<String, ServiceRating> =
-        current + (category to next(current[category] ?: ServiceRating(), rating))
+    ): Map<String, ServiceRating> {
+        val normalized = ServiceCategories.normalize(category)
+        return current + (normalized to next(current[normalized] ?: ServiceRating(), rating))
+    }
 }

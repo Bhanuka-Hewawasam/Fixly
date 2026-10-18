@@ -13,6 +13,7 @@ import kotlinx.coroutines.tasks.await
 import lk.ac.nibm.hdse.fixly_20.data.remote.CloudinaryUploader
 import lk.ac.nibm.hdse.fixly_20.model.JobPost
 import lk.ac.nibm.hdse.fixly_20.model.JobStatusPolicy
+import lk.ac.nibm.hdse.fixly_20.util.ServiceCategories
 
 class JobRepository(
     private val firebaseAuth: FirebaseAuth = FirebaseAuth.getInstance(),
@@ -49,7 +50,7 @@ class JobRepository(
                 jobId = docRef.id,
                 customerId = customerId,
                 customerName = customerName,
-                category = category,
+                category = ServiceCategories.normalize(category),
                 description = description,
                 preferredDate = preferredDate,
                 preferredTime = preferredTime,
@@ -69,10 +70,8 @@ class JobRepository(
 
     fun observeOpenJobs(providerCategories: List<String>): Flow<List<JobPost>> = callbackFlow {
         val currentUid = firebaseAuth.currentUser?.uid
-        var query: Query = firestore.collection("jobPosts").whereEqualTo("status", "Open")
-        if (providerCategories.isNotEmpty() && providerCategories.size <= 10) {
-            query = query.whereIn("category", providerCategories)
-        }
+        val normalizedProviderCategories = providerCategories.map { ServiceCategories.normalize(it) }.toSet()
+        val query: Query = firestore.collection("jobPosts").whereEqualTo("status", "Open")
         val listener = query
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
@@ -81,7 +80,12 @@ class JobRepository(
                     return@addSnapshotListener
                 }
                 val jobs = snapshot?.toObjects(JobPost::class.java) ?: emptyList()
-                val filteredJobs = jobs.filter { it.customerId != currentUid }
+                val filteredJobs = jobs.filter { job ->
+                    if (job.customerId == currentUid) return@filter false
+                    if (normalizedProviderCategories.isEmpty()) return@filter true
+                    val normalizedJobCategory = ServiceCategories.normalize(job.category)
+                    normalizedJobCategory in normalizedProviderCategories
+                }
                 val sortedJobs = filteredJobs.sortedWith(
                     compareByDescending<JobPost> { it.isEmergency }
                         .thenByDescending { it.createdAt }
@@ -136,7 +140,7 @@ class JobRepository(
 
         val listener = firestore.collection("jobPosts")
             .whereEqualTo("assignedProviderId", providerId)
-            .whereIn("status", listOf("Accepted", "Assigned", "In Progress"))
+            .whereIn("status", listOf("Assigned", "In Progress"))
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     error.printStackTrace()
