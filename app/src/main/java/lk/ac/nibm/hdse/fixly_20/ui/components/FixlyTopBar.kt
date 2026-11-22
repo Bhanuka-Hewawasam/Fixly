@@ -2,6 +2,7 @@ package lk.ac.nibm.hdse.fixly_20.ui.components
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -38,8 +39,7 @@ fun FixlyTopBar(
 
     Surface(
         color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 1.dp,
-        shadowElevation = 2.dp,
+        shadowElevation = 3.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
         TopAppBar(
@@ -57,8 +57,8 @@ fun FixlyTopBar(
                     ) {
                         Image(
                             painter = painterResource(id = R.drawable.fixly_logo),
-                            contentDescription = "Fixly Logo",
-                            modifier = Modifier.size(30.dp)
+                            contentDescription = "Fixly",
+                            modifier = Modifier.size(32.dp)
                         )
                     }
                 }
@@ -69,7 +69,8 @@ fun FixlyTopBar(
                     style = MaterialTheme.typography.titleLarge.copy(
                         fontWeight = FontWeight.Bold,
                         fontSize = 20.sp,
-                        color = MaterialTheme.colorScheme.primary
+                        letterSpacing = (-0.35).sp,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 )
             },
@@ -79,24 +80,32 @@ fun FixlyTopBar(
                         BadgedBox(
                             badge = {
                                 if (unreadNotificationCount > 0) {
-                                    Badge { Text("$unreadNotificationCount") }
+                                    Badge {
+                                        Text(unreadNotificationCount.coerceAtMost(99).toString())
+                                    }
                                 }
                             }
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.Notifications,
-                                contentDescription = "Emergency Notifications",
-                                tint = MaterialTheme.colorScheme.onSurface
+                                contentDescription = "Notifications",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(2.dp))
                 }
 
                 Box(
                     modifier = Modifier
                         .padding(end = 16.dp)
-                        .size(38.dp)
+                        .size(40.dp)
+                        .border(
+                            width = 2.dp,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = CircleShape
+                        )
+                        .padding(2.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.primary)
                         .clickable(
@@ -109,7 +118,7 @@ fun FixlyTopBar(
                     if (!profilePictureUrl.isNullOrBlank()) {
                         SubcomposeAsyncImage(
                             model = profilePictureUrl,
-                            contentDescription = "Profile Photo",
+                            contentDescription = "Profile photo",
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
                         ) {
@@ -119,8 +128,7 @@ fun FixlyTopBar(
                                     text = initial.toString(),
                                     style = MaterialTheme.typography.titleMedium.copy(
                                         color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 17.sp
+                                        fontWeight = FontWeight.Bold
                                     )
                                 )
                             } else {
@@ -132,8 +140,7 @@ fun FixlyTopBar(
                             text = initial.toString(),
                             style = MaterialTheme.typography.titleMedium.copy(
                                 color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 17.sp
+                                fontWeight = FontWeight.Bold
                             )
                         )
                     }
