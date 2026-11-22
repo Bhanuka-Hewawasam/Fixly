@@ -18,7 +18,7 @@
         android:theme="@style/Theme.Fixly_20">
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyAKnHy23lH_TeWN9-N6NaZ4eu5HAtEeWxs" />
+            android:value="${MAPS_API_KEY}" />
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

@@ -3,7 +3,6 @@ package lk.ac.nibm.hdse.fixly_20.ui.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -18,17 +17,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 fun getCategoryVectorIcon(category: String): ImageVector {
     return when (category.lowercase().trim()) {
-        "plumbing" -> Icons.Outlined.WaterDrop
-        "electrical" -> Icons.Outlined.ElectricBolt
+        "plumbing", "plumber" -> Icons.Outlined.WaterDrop
+        "electrical", "electrician" -> Icons.Outlined.ElectricBolt
         "cleaning" -> Icons.Outlined.AutoAwesome
         "carpentry" -> Icons.Outlined.Handyman
         "painting" -> Icons.Outlined.FormatPaint
-        "ac repair" -> Icons.Outlined.AcUnit
+        "ac repair", "ac technician" -> Icons.Outlined.AcUnit
         "gardening" -> Icons.Outlined.Yard
+        "vehicle mechanic", "mechanic" -> Icons.Outlined.DirectionsCar
+        "computer technician", "computer repair" -> Icons.Outlined.Computer
         else -> Icons.Outlined.Construction
     }
 }
@@ -43,58 +43,61 @@ fun CategoryCard(
     modifier: Modifier = Modifier
 ) {
     val icon = getCategoryVectorIcon(category)
-    val lower = category.lowercase().trim()
-
-    val (bgTint, iconColor) = when {
-        lower.contains("plum") -> Pair(Color(0xFFF0F9FF), Color(0xFF0284C7)) // Sky
-        lower.contains("electr") -> Pair(Color(0xFFFEF3C7), Color(0xFFD97706)) // Amber
-        lower.contains("clean") -> Pair(Color(0xFFF3E8FF), Color(0xFF9333EA)) // Purple
-        else -> Pair(Color(0xFFECFDF5), Color(0xFF059669)) // Emerald
+    val normalized = category.lowercase().trim()
+    val accent = when {
+        normalized.contains("plumb") -> Color(0xFF1686C7)
+        normalized.contains("electr") -> Color(0xFFB7791F)
+        normalized.contains("clean") -> Color(0xFF8756C5)
+        normalized.contains("ac") -> Color(0xFF168A9B)
+        normalized.contains("mechanic") -> Color(0xFF4774D8)
+        else -> MaterialTheme.colorScheme.tertiary
     }
-
-    val containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
-    val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else Color(0xFFE2E8F0)
-    val textColor = if (isSelected) MaterialTheme.colorScheme.primary else Color(0xFF334155)
+    val tint = accent.copy(alpha = 0.10f)
+    val container = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+        else MaterialTheme.colorScheme.surface
+    val border = if (isSelected) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.outlineVariant
+    val foreground = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+        else MaterialTheme.colorScheme.onSurface
 
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(20.dp),
-        color = containerColor,
-        border = BorderStroke(if (isSelected) 2.dp else 1.dp, borderColor),
-        shadowElevation = if (isSelected) 4.dp else 1.5.dp,
+        shape = RoundedCornerShape(22.dp),
+        color = container,
+        border = BorderStroke(if (isSelected) 1.7.dp else 1.dp, border),
+        shadowElevation = if (isSelected) 3.dp else 0.dp,
         modifier = modifier
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
             modifier = Modifier
-                .padding(vertical = 16.dp, horizontal = 8.dp)
                 .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 17.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(52.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(bgTint),
+                    .size(54.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(tint),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
-                    contentDescription = category,
-                    tint = iconColor,
-                    modifier = Modifier.size(26.dp)
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(27.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(11.dp))
 
             Text(
                 text = category,
                 style = MaterialTheme.typography.labelMedium.copy(
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 12.5.sp
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold
                 ),
-                color = textColor,
+                color = foreground,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis

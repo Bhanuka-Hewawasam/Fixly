@@ -8,6 +8,13 @@ plugins {
     id("com.google.devtools.ksp") version "2.0.20-1.0.24"
 }
 
+val localProperties = java.util.Properties().apply {
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.inputStream().use { load(it) }
+    }
+}
+
 android {
     namespace = "lk.ac.nibm.hdse.fixly_20"
     compileSdk = 34
@@ -18,6 +25,8 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+        manifestPlaceholders["MAPS_API_KEY"] =
+            localProperties.getProperty("MAPS_API_KEY", "")
     }
 
     buildFeatures {
