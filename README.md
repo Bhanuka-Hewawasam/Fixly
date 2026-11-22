@@ -72,11 +72,11 @@ Fixly/
 1. Clone the repository and open it in Android Studio.
 2. Create or select a Firebase project and register the Android application using the application ID in `app/build.gradle.kts`.
 3. Add your own `google-services.json` to the `app/` directory. Do not commit private service-account credentials.
-4. Configure the Maps API key locally (see the project configuration and Android documentation); restrict the key to this Android application and only the APIs it needs.
+4. Add `MAPS_API_KEY=your_restricted_key` to your local `local.properties` file (the file is ignored by Git). Restrict the key to this Android application and only the APIs it needs.
 5. Configure any Cloudinary values required by the upload integration.
 6. Sync Gradle and run the `app` configuration on an emulator or Android device.
 
-Never publish private keys, service-account JSON files, signing credentials or unrestricted API keys. Rotate any credential that has been exposed publicly.
+Never publish private keys, service-account JSON files, signing credentials or unrestricted API keys. The Maps key previously committed in the Android manifest must be rotated in Google Cloud Console and restricted; moving it to local configuration does not erase it from Git history. Rotate any other credential that has been exposed publicly.
 
 ## Firebase security
 
