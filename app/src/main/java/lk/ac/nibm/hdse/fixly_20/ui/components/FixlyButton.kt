@@ -1,5 +1,6 @@
 package lk.ac.nibm.hdse.fixly_20.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -77,11 +78,7 @@ fun FixlySecondaryButton(
         onClick = onClick,
         enabled = enabled,
         shape = FixlyButtonShape,
-        border = ButtonDefaults.outlinedButtonBorder.copy(
-            brush = androidx.compose.ui.graphics.SolidColor(
-                MaterialTheme.colorScheme.outline
-            )
-        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         colors = ButtonDefaults.outlinedButtonColors(
             contentColor = MaterialTheme.colorScheme.primary,
             disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
