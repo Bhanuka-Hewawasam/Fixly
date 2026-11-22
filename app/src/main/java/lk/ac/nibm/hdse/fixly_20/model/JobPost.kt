@@ -1,26 +1,46 @@
 package lk.ac.nibm.hdse.fixly_20.model
 
 import com.google.firebase.firestore.GeoPoint
+import com.google.firebase.firestore.PropertyName
 import com.google.firebase.firestore.ServerTimestamp
 import java.util.Date
 
-/**
- * Firestore document: jobPosts/{jobId}
- * Bids for this job live in a sub-collection: jobPosts/{jobId}/bids/{bidId}
- */
 data class JobPost(
     val jobId: String = "",
     val customerId: String = "",
     val customerName: String = "",
-    val category: String = "",          // "Plumbing", "Electrical", "Cleaning", "Other"
+    val category: String = "",
     val description: String = "",
-    val preferredDate: String = "",      // simple text for now, e.g. "2026-10-12"
-    val preferredTime: String = "",      // e.g. "10:00 AM"
-    val isEmergency: Boolean = false,    // sir's requirement — urgent jobs flagged for faster matching
+    val preferredDate: String = "",
+    val preferredTime: String = "",
+
+    // Pinned name: without this, Firestore saves a Kotlin "isEmergency" property as "emergency",
+    // and our queries on "isEmergency" would never match.
+    @get:PropertyName("isEmergency")
+    val isEmergency: Boolean = false,
+
     val location: GeoPoint? = null,
     val address: String = "",
-    val status: String = "Open",         // Open -> Assigned -> In Progress -> Completed
+    val status: String = "Open",            // Open -> Accepted -> In Progress -> Completed
     val selectedBidId: String? = null,
-    val imageUrls: List<String> = emptyList(), // Added for multiple problem photo uploads
+    val assignedProviderId: String? = null,
+    val assignedProviderName: String? = null,
+    val providerPhone: String? = null,
+    val providerCertificateUrl: String? = null,
+    val acceptedBidPrice: Double? = null,
+    val acceptedProviderRating: Double? = null,
+    val acceptedProviderReviewCount: Int? = null,
+    val bookingLockId: String? = null,
+    val emergencyAlertId: String? = null,
+    val providerLocation: GeoPoint? = null,
+    val beforePhotoUrl: String? = null,
+    val afterPhotoUrl: String? = null,
+
+    // After the provider marks the job Completed, the customer confirms it and leaves a review
+    val customerConfirmed: Boolean = false,
+    val rating: Int? = null,                // 1–5 stars
+    val reviewComment: String? = null,
+
+    val imageUrls: List<String> = emptyList(),
     @ServerTimestamp val createdAt: Date? = null
 )

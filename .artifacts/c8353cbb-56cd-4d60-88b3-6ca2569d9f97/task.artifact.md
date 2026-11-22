@@ -1,0 +1,8 @@
+- `[ ]` Update AndroidManifest.xml with Google Maps API key
+- `[ ]` Update JobPost.kt model
+- `[ ]` Update BidRepository.kt and JobRepository.kt
+- `[ ]` Implement AcceptedJobs ViewModel & Screen
+- `[ ]` Implement Provider Tracking ViewModel & Screen
+- `[ ]` Implement Customer Tracking ViewModel & Screen
+- `[ ]` Update MyBookingsScreen and AppNavigation
+- `[ ]` Verify build with gradle build

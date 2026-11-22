@@ -12,6 +12,9 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import lk.ac.nibm.hdse.fixly_20.data.remote.CloudinaryUploader
 import lk.ac.nibm.hdse.fixly_20.model.JobPost
+import lk.ac.nibm.hdse.fixly_20.model.JobStatusPolicy
+import lk.ac.nibm.hdse.fixly_20.util.ServiceCategories
+import lk.ac.nibm.hdse.fixly_20.util.providerJobSlotKeys
 
 class JobRepository(
     private val firebaseAuth: FirebaseAuth = FirebaseAuth.getInstance(),
@@ -48,7 +51,7 @@ class JobRepository(
                 jobId = docRef.id,
                 customerId = customerId,
                 customerName = customerName,
-                category = category,
+                category = ServiceCategories.normalize(category),
                 description = description,
                 preferredDate = preferredDate,
                 preferredTime = preferredTime,
@@ -66,10 +69,11 @@ class JobRepository(
         }
     }
 
-    /** Real-time stream of all open jobs — used by the Provider's Available Jobs screen. */
-    fun observeOpenJobs(): Flow<List<JobPost>> = callbackFlow {
-        val listener = firestore.collection("jobPosts")
-            .whereEqualTo("status", "Open")
+    fun observeOpenJobs(providerCategories: List<String>): Flow<List<JobPost>> = callbackFlow {
+        val currentUid = firebaseAuth.currentUser?.uid
+        val normalizedProviderCategories = providerCategories.map { ServiceCategories.normalize(it) }.toSet()
+        val query: Query = firestore.collection("jobPosts").whereEqualTo("status", "Open")
+        val listener = query
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     error.printStackTrace()
@@ -77,7 +81,13 @@ class JobRepository(
                     return@addSnapshotListener
                 }
                 val jobs = snapshot?.toObjects(JobPost::class.java) ?: emptyList()
-                val sortedJobs = jobs.sortedWith(
+                val filteredJobs = jobs.filter { job ->
+                    if (job.customerId == currentUid) return@filter false
+                    if (normalizedProviderCategories.isEmpty()) return@filter true
+                    val normalizedJobCategory = ServiceCategories.normalize(job.category)
+                    normalizedJobCategory in normalizedProviderCategories
+                }
+                val sortedJobs = filteredJobs.sortedWith(
                     compareByDescending<JobPost> { it.isEmergency }
                         .thenByDescending { it.createdAt }
                 )
@@ -86,7 +96,6 @@ class JobRepository(
         awaitClose { listener.remove() }
     }
 
-    /** Real-time stream of the logged-in CUSTOMER's own jobs — used by My Bookings. */
     fun observeCustomerJobs(): Flow<List<JobPost>> = callbackFlow {
         val customerId = firebaseAuth.currentUser?.uid
         if (customerId == null) {
@@ -94,7 +103,6 @@ class JobRepository(
             close()
             return@callbackFlow
         }
-
         val listener = firestore.collection("jobPosts")
             .whereEqualTo("customerId", customerId)
             .addSnapshotListener { snapshot, error ->
@@ -108,5 +116,245 @@ class JobRepository(
                 trySend(sortedJobs)
             }
         awaitClose { listener.remove() }
+    }
+
+    suspend fun cancelJobAsCustomer(jobId: String, reason: String): Result<Unit> =
+        cancelJob(jobId, reason, "customer")
+
+    suspend fun cancelJobAsProvider(jobId: String, reason: String): Result<Unit> =
+        cancelJob(jobId, reason, "provider")
+
+    private suspend fun cancelJob(jobId: String, reason: String, cancelledBy: String): Result<Unit> {
+        return try {
+            val uid = firebaseAuth.currentUser?.uid
+                ?: throw IllegalStateException("Sign in to cancel this job.")
+            val jobRef = firestore.collection("jobPosts").document(jobId)
+            firestore.runTransaction { transaction ->
+                val jobSnapshot = transaction.get(jobRef)
+                if (!jobSnapshot.exists()) throw IllegalStateException("This job is already closed")
+                if (jobSnapshot.getBoolean("isEmergency") == true) {
+                    throw IllegalStateException("Emergency jobs cannot be cancelled here.")
+                }
+
+                val status = jobSnapshot.getString("status")
+                val providerId = jobSnapshot.getString("assignedProviderId")
+                if (cancelledBy == "customer") {
+                    if (jobSnapshot.getString("customerId") != uid) {
+                        throw IllegalStateException("You can cancel only jobs you posted.")
+                    }
+                    if (status !in listOf("Open", "Accepted")) {
+                        throw IllegalStateException(
+                            if (status == "In Progress" || status == "Completed") {
+                                "Work has already started"
+                            } else {
+                                "This job is already closed"
+                            }
+                        )
+                    }
+                } else {
+                    if (providerId != uid) {
+                        throw IllegalStateException("You can cancel only bookings assigned to you.")
+                    }
+                    if (status != "Accepted") {
+                        throw IllegalStateException(
+                            if (status == "In Progress" || status == "Completed") {
+                                "Work has already started"
+                            } else {
+                                "This job is already closed"
+                            }
+                        )
+                    }
+                }
+
+                val bookingLockId = jobSnapshot.getString("bookingLockId")
+                val bookingLockRef = bookingLockId
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { firestore.collection("bookingLocks").document(it) }
+                val bookingLockSnapshot = bookingLockRef?.let(transaction::get)
+                val slotRefs = providerId?.let {
+                    providerJobSlotKeys(
+                        it,
+                        jobSnapshot.getString("preferredDate").orEmpty(),
+                        jobSnapshot.getString("preferredTime").orEmpty()
+                    ).map { slotKey -> firestore.collection("providerSlots").document(slotKey) }
+                }.orEmpty()
+                val slotSnapshots = slotRefs.map { slotRef -> transaction.get(slotRef) }
+                val bidRef = if (cancelledBy == "provider") {
+                    firestore.collection("jobPosts").document(jobId)
+                        .collection("bids").document(uid)
+                } else {
+                    null
+                }
+                val bidSnapshot = bidRef?.let(transaction::get)
+
+                val cancellationFields = mutableMapOf<String, Any>(
+                    "cancelledBy" to cancelledBy,
+                    "cancelledAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                )
+                if (reason.isNotBlank()) {
+                    cancellationFields["cancelReason"] = reason.trim()
+                } else {
+                    cancellationFields["cancelReason"] = com.google.firebase.firestore.FieldValue.delete()
+                }
+
+                if (cancelledBy == "customer") {
+                    transaction.update(jobRef, cancellationFields + ("status" to "Cancelled"))
+                } else {
+                    transaction.update(
+                        jobRef,
+                        cancellationFields + mapOf(
+                            "status" to "Open",
+                            "assignedProviderId" to com.google.firebase.firestore.FieldValue.delete(),
+                            "assignedProviderName" to com.google.firebase.firestore.FieldValue.delete(),
+                            "acceptedBidPrice" to com.google.firebase.firestore.FieldValue.delete(),
+                            "acceptedProviderRating" to com.google.firebase.firestore.FieldValue.delete(),
+                            "acceptedProviderReviewCount" to com.google.firebase.firestore.FieldValue.delete(),
+                            "providerPhone" to com.google.firebase.firestore.FieldValue.delete(),
+                            "providerCertificateUrl" to com.google.firebase.firestore.FieldValue.delete(),
+                            "providerLocation" to com.google.firebase.firestore.FieldValue.delete(),
+                            "selectedBidId" to com.google.firebase.firestore.FieldValue.delete(),
+                            "bookingLockId" to com.google.firebase.firestore.FieldValue.delete()
+                        )
+                    )
+                    if (bidRef != null && bidSnapshot?.exists() == true) {
+                        transaction.update(bidRef, "isWithdrawn", true)
+                    }
+                }
+                if (bookingLockRef != null && bookingLockSnapshot?.exists() == true) {
+                    transaction.delete(bookingLockRef)
+                }
+                slotRefs.zip(slotSnapshots)
+                    .filter { (_, slotSnapshot) -> slotSnapshot.getString("jobId") == jobId }
+                    .forEach { (slotRef, _) -> transaction.delete(slotRef) }
+            }.await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    fun observeJob(jobId: String): Flow<JobPost?> = callbackFlow {
+        val listener = firestore.collection("jobPosts").document(jobId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    error.printStackTrace()
+                    trySend(null)
+                    return@addSnapshotListener
+                }
+                trySend(snapshot?.toObject(JobPost::class.java))
+            }
+        awaitClose { listener.remove() }
+    }
+
+    fun observeProviderAssignedJobs(): Flow<List<JobPost>> = callbackFlow {
+        val providerId = firebaseAuth.currentUser?.uid
+        if (providerId == null) {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+
+        val listener = firestore.collection("jobPosts")
+            .whereEqualTo("assignedProviderId", providerId)
+            .whereIn("status", listOf("Accepted", "Assigned", "In Progress"))
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    error.printStackTrace()
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val jobs = snapshot?.toObjects(JobPost::class.java) ?: emptyList()
+                val sortedJobs = jobs.sortedByDescending { it.createdAt }
+                trySend(sortedJobs)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun getActiveProviderJobs(): Result<List<JobPost>> {
+        return try {
+            val providerId = firebaseAuth.currentUser?.uid
+                ?: return Result.failure(IllegalStateException("No logged-in user"))
+            val snapshot = firestore.collection("jobPosts")
+                .whereEqualTo("assignedProviderId", providerId)
+                .whereIn("status", listOf("Accepted", "In Progress"))
+                .get()
+                .await()
+            Result.success(snapshot.toObjects(JobPost::class.java))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateProviderLocation(jobId: String, location: GeoPoint): Result<Unit> {
+        return try {
+            firestore.collection("jobPosts").document(jobId)
+                .update("providerLocation", location)
+                .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun uploadEvidencePhoto(context: Context, jobId: String, type: String, imageUri: Uri): Result<String> {
+        return try {
+            val uploadResult = CloudinaryUploader.uploadFile(context, imageUri)
+            val url = uploadResult.getOrNull() ?: return Result.failure(IllegalStateException("Upload failed"))
+            val field = if (type == "before") "beforePhotoUrl" else "afterPhotoUrl"
+            firestore.collection("jobPosts").document(jobId).update(field, url).await()
+            Result.success(url)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateJobStatus(jobId: String, status: String): Result<Unit> {
+        return try {
+            val providerId = firebaseAuth.currentUser?.uid
+                ?: throw IllegalStateException("Sign in to update this job.")
+            val jobRef = firestore.collection("jobPosts").document(jobId)
+            firestore.runTransaction { transaction ->
+                val snapshot = transaction.get(jobRef)
+                val jobCustomerId = snapshot.getString("customerId")
+                if (jobCustomerId == providerId) {
+                    throw IllegalStateException("You cannot update a job where you are both customer and provider.")
+                }
+                if (snapshot.getString("assignedProviderId") != providerId) {
+                    throw IllegalStateException("You can update only jobs assigned to you.")
+                }
+                val currentStatus = snapshot.getString("status")
+                val allowed = JobStatusPolicy.canProviderTransition(
+                    authenticatedProviderId = providerId,
+                    assignedProviderId = snapshot.getString("assignedProviderId"),
+                    currentStatus = currentStatus,
+                    nextStatus = status,
+                    hasAfterPhoto = !snapshot.getString("afterPhotoUrl").isNullOrBlank()
+                )
+                if (!allowed) {
+                    throw IllegalStateException("Invalid status transition from $currentStatus to $status")
+                }
+                val slotRefs = if (status == "Completed" && snapshot.getBoolean("isEmergency") != true) {
+                    providerJobSlotKeys(
+                        providerId,
+                        snapshot.getString("preferredDate").orEmpty(),
+                        snapshot.getString("preferredTime").orEmpty()
+                    ).map { slotKey ->
+                        firestore.collection("providerSlots").document(slotKey)
+                    }
+                } else {
+                    emptyList()
+                }
+                val slotSnapshots = slotRefs.map { slotRef -> transaction.get(slotRef) }
+                transaction.update(jobRef, "status", status)
+                slotRefs.zip(slotSnapshots)
+                    .filter { (_, slotSnapshot) ->
+                        slotSnapshot.getString("jobId") == jobId
+                    }
+                    .forEach { (slotRef, _) -> transaction.delete(slotRef) }
+            }.await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 }

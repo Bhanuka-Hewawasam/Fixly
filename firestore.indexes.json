@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "emergencyServiceAreas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "availableForEmergency", "order": "ASCENDING" },
+        { "fieldPath": "suspended", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

@@ -1,0 +1,85 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="140dp"
+    android:height="120dp"
+    android:viewportWidth="140"
+    android:viewportHeight="120">
+
+    <!-- Light Blue Soft Background Accent Circle -->
+    <path
+        android:fillColor="#EBF2FF"
+        android:pathData="M70,60m-52,0a52,52 0 1,0 104,0a52,52 0 1,0 -104,0" />
+
+    <!-- Desk Surface -->
+    <path
+        android:strokeColor="#CBD5E1"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M24,96 L116,96" />
+
+    <!-- Character Body / Blue Shirt -->
+    <path
+        android:fillColor="#2563EB"
+        android:pathData="M44,72 C44,60 54,58 70,58 C86,58 96,60 96,72 L100,96 L40,96 Z" />
+
+    <!-- White Collar -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M62,58 L70,70 L78,58 Z" />
+
+    <!-- Head & Hair -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M56,30 C56,22 62,20 70,20 C78,20 84,22 84,30 L84,36 L56,36 Z" />
+    <path
+        android:fillColor="#FDBA74"
+        android:pathData="M58,34 C58,34 58,50 70,50 C82,50 82,34 82,34 Z" />
+
+    <!-- Friendly Face Features -->
+    <path
+        android:strokeColor="#1E293B"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M65,44 Q70,48 75,44" />
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M63,39 A2,2 0 1,1 63,38.9 Z M77,39 A2,2 0 1,1 77,38.9 Z" />
+
+    <!-- Laptop Base & Screen -->
+    <path
+        android:fillColor="#334155"
+        android:pathData="M42,76 L98,76 L92,92 L48,92 Z" />
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M48,52 L92,52 L92,76 L48,76 Z" />
+
+    <!-- Laptop Screen Display (Glowing Blue with Fixly Checklist) -->
+    <path
+        android:fillColor="#3B82F6"
+        android:pathData="M50,54 L90,54 L90,74 L50,74 Z" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M56,60 L62,60 M66,60 L84,60 M56,66 L62,66 M66,66 L78,66" />
+
+    <!-- Verified Green Checkmark Badge on Screen -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M80,63 A5,5 0 1,1 80,62.9 Z" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:pathData="M78,63 L80,65 L83,61" />
+
+    <!-- Floating Service Gear / Wrench Icon (Top Right) -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M104,32 C101,29 101,24 104,21 C107,18 112,18 115,21 L121,27 L116,32 L112,40 L104,32 Z" />
+
+    <!-- Floating House / Home Service Icon (Top Left) -->
+    <path
+        android:fillColor="#2563EB"
+        android:pathData="M28,38 L38,28 L48,38 L45,38 L45,46 L31,46 L31,38 Z" />
+
+</vector>

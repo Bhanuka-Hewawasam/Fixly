@@ -17,6 +17,7 @@ data class PostJobUiState(
     val errorMessage: String? = null,
     val isPostSuccessful: Boolean = false,
     val capturedLocation: GeoPoint? = null,
+    val locationAddress: String? = null,
     val isFetchingLocation: Boolean = false
 )
 
@@ -29,8 +30,12 @@ class PostJobViewModel(
     private val _uiState = MutableStateFlow(PostJobUiState())
     val uiState: StateFlow<PostJobUiState> = _uiState
 
-    fun setLocation(geoPoint: GeoPoint) {
-        _uiState.value = _uiState.value.copy(capturedLocation = geoPoint, isFetchingLocation = false)
+    fun setLocation(geoPoint: GeoPoint, address: String) {
+        _uiState.value = _uiState.value.copy(
+            capturedLocation = geoPoint,
+            locationAddress = address,
+            isFetchingLocation = false
+        )
     }
 
     fun setFetchingLocation(isFetching: Boolean) {
@@ -56,8 +61,8 @@ class PostJobViewModel(
                 _uiState.value = _uiState.value.copy(errorMessage = "Please describe the problem")
                 return
             }
-            address.isBlank() && _uiState.value.capturedLocation == null -> {
-                _uiState.value = _uiState.value.copy(errorMessage = "Please enter an address or capture your GPS location")
+            _uiState.value.capturedLocation == null -> {
+                _uiState.value = _uiState.value.copy(errorMessage = "Please choose a job location using current location or the map")
                 return
             }
         }

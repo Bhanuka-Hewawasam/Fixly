@@ -5,6 +5,8 @@ import java.util.Date
 
 /**
  * Firestore document: jobPosts/{jobId}/bids/{bidId}
+ * ratingAvg / ratingCount are the category-specific rating snapshot
+ * for the job's service at the time this bid was placed.
  */
 data class Bid(
     val bidId: String = "",
@@ -13,6 +15,14 @@ data class Bid(
     val providerName: String = "",
     val price: Double = 0.0,
     val message: String = "",
-    val providerRating: Double = 0.0, // placeholder until ratings/reviews feature exists
-    @ServerTimestamp val createdAt: Date? = null
+    val providerRating: Double = 0.0,
+    val providerReviewCount: Int = 0,
+    val ratingAvg: Double = 0.0,
+    val ratingCount: Int = 0,
+    val isCertified: Boolean = false,
+    val certificateUrl: String? = null,
+    val distanceKm: Double? = null,
+    val estimatedArrivalMinutes: Int? = null,
+    @ServerTimestamp val createdAt: Date? = null,
+    val isWithdrawn: Boolean = false
 )

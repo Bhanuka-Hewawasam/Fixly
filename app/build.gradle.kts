@@ -22,6 +22,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     compileOptions {
@@ -50,11 +51,16 @@ dependencies {
     // --- Navigation ---
     implementation("androidx.navigation:navigation-compose:2.7.7")
 
-    // --- Firebase ---
+    // --- Firebase & Google Auth ---
     implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("com.google.firebase:firebase-firestore-ktx")
     implementation("com.google.firebase:firebase-storage-ktx")
+    implementation("com.google.firebase:firebase-messaging-ktx")
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
+
+    // --- Image Loading (Coil) ---
+    implementation("io.coil-kt:coil-compose:2.7.0")
 
     // --- OkHttp (for Cloudinary REST API upload) ---
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
