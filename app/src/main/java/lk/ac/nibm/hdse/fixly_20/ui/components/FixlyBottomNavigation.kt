@@ -10,6 +10,8 @@ import androidx.compose.material.icons.filled.Work
 import androidx.compose.material.icons.outlined.Handyman
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.*
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -53,6 +55,10 @@ fun FixlyBottomNavBar(
         ) {
             items.forEach { item ->
                 val selected = currentRoute == item.route
+                val iconTint by animateColorAsState(
+                    targetValue = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    label = "bottomNavIconTint"
+                )
                 NavigationBarItem(
                     selected = selected,
                     onClick = { if (!selected) onNavigate(item.route) },
