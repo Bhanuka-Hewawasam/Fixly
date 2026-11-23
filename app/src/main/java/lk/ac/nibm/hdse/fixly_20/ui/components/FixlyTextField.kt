@@ -60,7 +60,7 @@ fun FixlyTextField(
                 focusedLabelColor = MaterialTheme.colorScheme.primary,
                 unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
             ),
-            modifier = Modifier.fillMaxWidth()
+            modifier = modifier.fillMaxWidth()
         )
         if (!errorMessage.isNullOrBlank()) {
             Spacer(modifier = Modifier.height(4.dp))
