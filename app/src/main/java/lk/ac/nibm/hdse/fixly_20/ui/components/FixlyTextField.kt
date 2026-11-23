@@ -10,7 +10,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 
@@ -38,6 +37,7 @@ fun FixlyTextField(
             value = value,
             onValueChange = onValueChange,
             label = { Text(label) },
+            supportingText = errorMessage?.takeIf { it.isNotBlank() }?.let { message -> { Text(message) } },
             placeholder = placeholder?.let { { Text(it) } },
             leadingIcon = leadingIcon,
             trailingIcon = trailingIcon,
@@ -60,15 +60,7 @@ fun FixlyTextField(
                 focusedLabelColor = MaterialTheme.colorScheme.primary,
                 unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
             ),
-            modifier = Modifier.fillMaxWidth()
+            modifier = modifier.fillMaxWidth()
         )
-        if (!errorMessage.isNullOrBlank()) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = errorMessage,
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
     }
 }

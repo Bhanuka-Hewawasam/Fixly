@@ -14,8 +14,8 @@ object ThemeState {
     }
 
     fun setDarkMode(context: Context, enabled: Boolean) {
-        _isDarkMode.value = enabled
         val prefs = context.getSharedPreferences("fixly_theme_prefs", Context.MODE_PRIVATE)
         prefs.edit().putBoolean("is_dark_mode", enabled).apply()
+        _isDarkMode.value = enabled
     }
 }

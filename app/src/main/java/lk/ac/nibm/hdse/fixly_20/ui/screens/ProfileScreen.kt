@@ -213,7 +213,7 @@ fun ProfileScreen(
     }
     LaunchedEffect(mapPoint) { cameraPositionState.position = CameraPosition.fromLatLngZoom(mapPoint, 14f) }
 
-    val userName = uiState.user?.name.orEmpty().ifBlank { "Semitha Binuk" }
+    val userName = uiState.user?.name.orEmpty().ifBlank { "Your name" }
     val userInitials = userName.split(" ").let { parts ->
         if (parts.size >= 2) "${parts[0].firstOrNull() ?: 'S'}${parts[1].firstOrNull() ?: 'B'}"
         else "SB"
@@ -351,7 +351,7 @@ fun ProfileScreen(
                                         modifier = Modifier.size(14.dp)
                                     )
                                     Text(
-                                        text = uiState.user?.phoneNumber.orEmpty().ifBlank { "077750062" },
+                                        text = uiState.user?.phoneNumber.orEmpty().ifBlank { "Add your phone number" },
                                         style = MaterialTheme.typography.bodyMedium.copy(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             fontSize = 13.sp
@@ -369,7 +369,7 @@ fun ProfileScreen(
                                         modifier = Modifier.size(14.dp)
                                     )
                                     Text(
-                                        text = uiState.user?.email.orEmpty().ifBlank { "semthabinuk152@gmail.com" },
+                                        text = uiState.user?.email.orEmpty().ifBlank { "No email available" },
                                         style = MaterialTheme.typography.bodySmall.copy(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             fontSize = 12.5.sp
@@ -913,7 +913,7 @@ fun ProfileScreen(
                                     style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF64748B), fontSize = 11.5.sp)
                                 )
                                 Text(
-                                    text = uiState.user?.name.orEmpty().ifBlank { "semithabinuk" },
+                                    text = uiState.user?.name.orEmpty().ifBlank { "Not provided" },
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp, color = Color(0xFF1E293B))
                                 )
                             }
@@ -937,7 +937,7 @@ fun ProfileScreen(
                                     style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF64748B), fontSize = 11.5.sp)
                                 )
                                 Text(
-                                    text = uiState.user?.phoneNumber.orEmpty().ifBlank { "0772015236" },
+                                    text = uiState.user?.phoneNumber.orEmpty().ifBlank { "Not provided" },
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp, color = Color(0xFF1E293B))
                                 )
                             }
@@ -961,7 +961,7 @@ fun ProfileScreen(
                                     style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF64748B), fontSize = 11.5.sp)
                                 )
                                 Text(
-                                    text = "${uiState.user?.email.orEmpty().ifBlank { "semithabinuk453@gmail.com" }} (Cannot be changed)",
+                                    text = "${uiState.user?.email.orEmpty().ifBlank { "Not available" }} (Cannot be changed)",
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp, color = Color(0xFF1E293B))
                                 )
                             }
@@ -1008,7 +1008,7 @@ fun ProfileScreen(
                     HorizontalDivider(color = Color(0xFFE2E8F0))
 
                     Text(
-                        text = "Your account is secured with Firebase Authentication and end-to-end encryption for all location data and service requests.",
+                        text = "Your account uses Firebase Authentication. Location and service-request data are handled according to the app's Firebase security rules and privacy settings. Avoid sharing sensitive information in public service descriptions.",
                         style = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFF475569))
                     )
 
@@ -1096,9 +1096,10 @@ fun ProfileScreen(
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                             )
                         }
-                        Switch(
-                            checked = true,
-                            onCheckedChange = {}
+                        Text(
+                            text = "Managed by device settings",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
 
@@ -1119,7 +1120,7 @@ fun ProfileScreen(
                                 style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF64748B), fontWeight = FontWeight.Bold)
                             )
                             Text(
-                                text = "v2.0.0 (Production Release)",
+                                text = "Development build",
                                 style = MaterialTheme.typography.titleSmall.copy(color = Color(0xFF1E293B), fontWeight = FontWeight.Bold)
                             )
                         }

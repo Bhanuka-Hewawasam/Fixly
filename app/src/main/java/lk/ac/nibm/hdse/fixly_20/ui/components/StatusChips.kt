@@ -13,7 +13,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -26,8 +25,8 @@ fun JobStatusChip(
 ) {
     val (backgroundColor, textColor) = when (status.lowercase()) {
         "open" -> FixlyPrimaryContainer to FixlyOnPrimaryContainer
-        "assigned" -> FixlyWarningContainer to Color(0xFF92400E)
-        "in progress" -> Color(0xFFF3E8FF) to Color(0xFF6B21A8)
+        "assigned" -> FixlyWarningContainer to MaterialTheme.colorScheme.onSecondaryContainer
+        "in progress" -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
         "completed" -> FixlySuccessContainer to FixlyOnSuccessContainer
         else -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
     }

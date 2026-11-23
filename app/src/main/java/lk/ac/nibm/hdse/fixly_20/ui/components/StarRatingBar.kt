@@ -1,6 +1,8 @@
 package lk.ac.nibm.hdse.fixly_20.ui.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.semantics.contentDescription
+import androidx.compose.foundation.semantics.semantics
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -21,11 +23,13 @@ fun StarRatingBar(
     modifier: Modifier = Modifier,
     onRatingChange: ((Int) -> Unit)? = null
 ) {
-    Row(modifier = modifier) {
+    Row(modifier = modifier.semantics { contentDescription = "Rating: ${rating.coerceIn(0, 5)} out of 5 stars" }) {
         for (star in 1..5) {
             val filled = star <= rating
             val tapModifier = if (onRatingChange != null) {
-                Modifier.clickable { onRatingChange(star) }
+                Modifier.clickable(
+                    onClickLabel = "Rate $star out of 5 stars"
+                ) { onRatingChange(star) }
             } else {
                 Modifier
             }
