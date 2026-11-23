@@ -62,13 +62,5 @@ fun FixlyTextField(
             ),
             modifier = modifier.fillMaxWidth()
         )
-        if (!errorMessage.isNullOrBlank()) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = errorMessage,
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
     }
 }
