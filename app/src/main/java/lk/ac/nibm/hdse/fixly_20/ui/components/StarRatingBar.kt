@@ -3,7 +3,6 @@ package lk.ac.nibm.hdse.fixly_20.ui.components
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.semantics.contentDescription
 import androidx.compose.foundation.semantics.semantics
-import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
