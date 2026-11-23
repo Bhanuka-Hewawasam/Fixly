@@ -1096,9 +1096,10 @@ fun ProfileScreen(
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                             )
                         }
-                        Switch(
-                            checked = true,
-                            onCheckedChange = {}
+                        Text(
+                            text = "Managed by device settings",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
 
