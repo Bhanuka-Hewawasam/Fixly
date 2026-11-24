@@ -107,10 +107,43 @@ fun RegisterScreen(
         ) {
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 1. FIXLY LOGO AND BRAND NAME
+            // 1. FIXLY BRAND
             FixlyLogo(size = LogoSize.MEDIUM, showTagline = false)
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Card(
+                shape = RoundedCornerShape(26.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Brush.linearGradient(
+                                listOf(Color(0xFF111827), Color(0xFF312E81), Color(0xFF2563EB))
+                            )
+                        )
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(7.dp)
+                ) {
+                    Text(
+                        text = "GOOD WORK STARTS HERE.",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            color = Color.White,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    )
+                    Text(
+                        text = "Create your account and connect with trusted home service professionals.",
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            color = Color.White.copy(alpha = 0.84f),
+                            lineHeight = 20.sp
+                        )
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             // 2. "CREATE ACCOUNT" TITLE
             Text(
