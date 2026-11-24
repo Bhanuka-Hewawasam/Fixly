@@ -271,6 +271,47 @@ fun ProfileScreen(
                     .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
+                Card(
+                    shape = RoundedCornerShape(28.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                Brush.linearGradient(
+                                    listOf(Color(0xFF111827), Color(0xFF312E81), Color(0xFF2563EB))
+                                )
+                            )
+                            .padding(22.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "YOUR FIXLY SPACE",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = Color(0xFFBFDBFE),
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.2.sp
+                            )
+                        )
+                        Text(
+                            text = "Make it yours.",
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                color = Color.White,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        )
+                        Text(
+                            text = "Keep your details, services and preferences up to date.",
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                color = Color.White.copy(alpha = 0.82f),
+                                lineHeight = 20.sp
+                            )
+                        )
+                    }
+                }
+
                 // USER PROFILE CARD
                 Card(
                     shape = RoundedCornerShape(24.dp),
