@@ -146,6 +146,51 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            Card(
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            androidx.compose.ui.graphics.Brush.linearGradient(
+                                listOf(Color(0xFF111827), Color(0xFF312E81), Color(0xFF2563EB))
+                            )
+                        )
+                        .padding(22.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "FIX THE LITTLE THINGS.\nLOVE YOUR SPACE.",
+                        style = MaterialTheme.typography.headlineSmall.copy(
+                            color = Color.White,
+                            fontWeight = FontWeight.ExtraBold,
+                            lineHeight = 30.sp
+                        )
+                    )
+                    Text(
+                        text = "Trusted local help, right when you need it.",
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            color = Color.White.copy(alpha = 0.82f)
+                        )
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Text(
+                text = "Welcome back", 
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
             Text(
                 text = "Home repair services, on demand",
                 style = MaterialTheme.typography.bodyMedium.copy(
