@@ -1,6 +1,7 @@
 package lk.ac.nibm.hdse.fixly_20.ui.screens
 
 import android.net.Uri
+import androidx.compose.animation.animateContentSize
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -173,11 +174,13 @@ fun HomeScreen(
                     // DASHBOARD CONTENT BASED ON ACTIVE ROLE
                     if (uiState.activeRole == "customer") {
                         CustomerDashboardView(
+                            userName = user?.name,
                             onPostJob = onPostJob,
                             onViewBookings = onViewBookings
                         )
                     } else {
                         ProviderDashboardView(
+                            userName = user?.name,
                             isVerified = user?.isVerified ?: false,
                             onViewAvailableJobs = onViewAvailableJobs,
                             onViewAcceptedJobs = onViewAcceptedJobs
@@ -901,554 +904,468 @@ fun HomeScreen(
 }
 
 @Composable
+private fun DashboardGreeting(
+    userName: String?,
+    roleLabel: String,
+    subtitle: String
+) {
+    val firstName = userName
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+        ?.substringBefore(" ")
+        ?: "there"
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .animateContentSize()
+            .padding(top = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        Text(
+            text = roleLabel,
+            style = MaterialTheme.typography.labelSmall.copy(
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.2.sp
+            )
+        )
+        Text(
+            text = "Hello, $firstName 👋",
+            style = MaterialTheme.typography.headlineSmall.copy(
+                color = MaterialTheme.colorScheme.onBackground,
+                fontWeight = FontWeight.Bold
+            )
+        )
+        Text(
+            text = subtitle,
+            style = MaterialTheme.typography.bodyMedium.copy(
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 20.sp
+            )
+        )
+    }
+}
+
+@Composable
 private fun CustomerDashboardView(
+    userName: String?,
     onPostJob: () -> Unit,
     onViewBookings: () -> Unit
 ) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(20.dp)
-    ) {
-        // --- PREMIUM HERO BANNER ---
+    var searchQuery by remember { mutableStateOf("") }
+    val categories = listOf(
+        Triple("Plumbing", "Leaks, taps & pipes", "https://images.unsplash.com/photo-1607472586893-edb57bdc0e39?w=900&auto=format&fit=crop&q=85"),
+        Triple("Electrical", "Wiring, lights & repairs", "https://images.unsplash.com/photo-1621905251918-48416bd8575a?w=900&auto=format&fit=crop&q=85"),
+        Triple("Cleaning", "A fresher, cleaner home", "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=900&auto=format&fit=crop&q=85"),
+        Triple("Home Repairs", "Fixes around your home", "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=900&auto=format&fit=crop&q=85")
+    )
+    val visibleCategories = categories.filter {
+        it.first.contains(searchQuery.trim(), ignoreCase = true) ||
+            it.second.contains(searchQuery.trim(), ignoreCase = true)
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(22.dp)) {
+        DashboardGreeting(
+            userName = userName,
+            roleLabel = "FIXLY  •  HOME SERVICES",
+            subtitle = "A better way to care for your home."
+        )
+
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            shape = RoundedCornerShape(20.dp),
+            placeholder = { Text("What do you need help with?") },
+            leadingIcon = {
+                Icon(Icons.Outlined.Search, contentDescription = "Search services")
+            },
+            trailingIcon = {
+                IconButton(onClick = onPostJob) {
+                    Icon(Icons.Outlined.Tune, contentDescription = "Browse services")
+                }
+            },
+            colors = OutlinedTextFieldDefaults.colors(
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                focusedBorderColor = MaterialTheme.colorScheme.primary
+            )
+        )
+
         Card(
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.Transparent
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+            shape = RoundedCornerShape(30.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF101B3C)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 5.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(
-                        brush = Brush.linearGradient(
-                            colors = listOf(
-                                Color(0xFF2563EB), // Blue 600
-                                Color(0xFF4F46E5), // Indigo 600
-                                Color(0xFF1D4ED8)  // Blue 700
+                    .heightIn(min = 250.dp)
+            ) {
+                SubcomposeAsyncImage(
+                    model = "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=1200&auto=format&fit=crop&q=90",
+                    contentDescription = "Professional home service technician at work",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.horizontalGradient(
+                                0f to Color(0xFF101B3C),
+                                0.58f to Color(0xE6101B3C),
+                                1f to Color(0x22101B3C)
                             )
                         )
-                    )
-                    .padding(22.dp)
-            ) {
+                )
                 Column(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth(0.82f)
+                        .padding(horizontal = 22.dp, vertical = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(13.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.fillMaxWidth()
+                    Surface(
+                        color = Color.White.copy(alpha = 0.13f),
+                        shape = RoundedCornerShape(50),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f))
                     ) {
-                        Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = Color(0xFFFEF3C7).copy(alpha = 0.2f),
-                            border = BorderStroke(1.dp, Color(0xFFFDE68A).copy(alpha = 0.3f))
+                        Row(
+                            modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.ElectricBolt,
-                                    contentDescription = null,
-                                    tint = Color(0xFFFCD34D),
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Fast Response Bidding",
-                                    style = MaterialTheme.typography.labelMedium.copy(
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = Color(0xFFFEF3C7),
-                                        fontSize = 11.5.sp
-                                    )
-                                )
-                            }
+                            Icon(
+                                Icons.Outlined.VerifiedUser,
+                                contentDescription = null,
+                                tint = Color(0xFFB7F34A),
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Text(
+                                "TRUSTED LOCAL PROFESSIONALS",
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.6.sp
+                            )
                         }
-                        EmergencyChip()
                     }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
                     Text(
-                        text = "What do you need fixed today?",
-                        style = MaterialTheme.typography.headlineSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            fontSize = 22.sp,
-                            lineHeight = 28.sp
-                        )
+                        "Your home.\nOur priority.",
+                        color = Color.White,
+                        fontSize = 31.sp,
+                        lineHeight = 35.sp,
+                        fontWeight = FontWeight.ExtraBold
                     )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
                     Text(
-                        text = "Post a request & receive instant competitive bids from verified experts near you.",
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            color = Color.White.copy(alpha = 0.9f),
-                            fontSize = 13.5.sp,
-                            lineHeight = 19.sp
-                        )
+                        "Reliable help for everyday repairs and home services, all in one place.",
+                        color = Color.White.copy(alpha = 0.86f),
+                        style = MaterialTheme.typography.bodyMedium,
+                        lineHeight = 21.sp
                     )
-
-                    Spacer(modifier = Modifier.height(18.dp))
-
                     Button(
                         onClick = onPostJob,
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.White,
-                            contentColor = Color(0xFF1D4ED8)
+                            containerColor = Color(0xFFB7F34A),
+                            contentColor = Color(0xFF14213D)
                         ),
-                        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 13.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        contentPadding = PaddingValues(horizontal = 17.dp, vertical = 13.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(Color(0xFFDBEAFE)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Add,
-                                    contentDescription = null,
-                                    tint = Color(0xFF1D4ED8),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = "Post a New Job",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp
-                                )
-                            )
-                        }
+                        Text("Post a service request", fontWeight = FontWeight.ExtraBold)
+                        Spacer(Modifier.width(8.dp))
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
                     }
                 }
             }
         }
 
-        // --- SEARCH INPUT BAR ---
-        OutlinedTextField(
-            value = "",
-            onValueChange = {},
-            readOnly = true,
-            placeholder = {
-                Text(
-                    text = "Search for plumbing, electrical, cleaning...",
-                    style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF94A3B8))
-                )
-            },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Outlined.Search,
-                    contentDescription = null,
-                    tint = Color(0xFF94A3B8),
-                    modifier = Modifier.size(18.dp)
-                )
-            },
-            shape = RoundedCornerShape(16.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surface,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                disabledContainerColor = MaterialTheme.colorScheme.surface,
-                focusedBorderColor = Color(0xFFCBD5E1),
-                unfocusedBorderColor = Color(0xFFE2E8F0)
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onPostJob)
-        )
-
-        // --- POPULAR CATEGORIES SECTION ---
-        Column(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = "Popular Categories",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 17.sp,
-                        color = Color(0xFF1E293B)
-                    )
-                )
-
-                TextButton(
-                    onClick = onPostJob,
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = "See All",
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.5.sp,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            val categories = listOf("Plumbing", "Electrical", "Cleaning", "Other")
+        Column(verticalArrangement = Arrangement.spacedBy(13.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                categories.forEach { category ->
-                    CategoryCard(
-                        category = category,
-                        isSelected = false,
-                        onClick = onPostJob,
-                        modifier = Modifier.weight(1f)
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(
+                        "What needs fixing?",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold
                     )
+                    Text(
+                        "Choose a service to get started",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                TextButton(onClick = onPostJob) {
+                    Text("See all", fontWeight = FontWeight.Bold)
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, null, modifier = Modifier.size(16.dp))
+                }
+            }
+
+            if (visibleCategories.isEmpty()) {
+                Text(
+                    "No matching service. Try plumbing, electrical or cleaning.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(vertical = 12.dp)
+                )
+            } else {
+                visibleCategories.chunked(2).forEach { rowItems ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        rowItems.forEach { item ->
+                            ServiceImageCard(
+                                title = item.first,
+                                subtitle = item.second,
+                                imageUrl = item.third,
+                                onClick = onPostJob,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        if (rowItems.size == 1) Spacer(Modifier.weight(1f))
+                    }
                 }
             }
         }
 
-        // --- MY BOOKINGS & BIDS ACTION CARD ---
         Card(
             onClick = onViewBookings,
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            ),
-            border = BorderStroke(1.dp, Color(0xFFF1F5F9)),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(
+                modifier = Modifier.fillMaxWidth().padding(18.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(18.dp)
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .size(46.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(Color(0xFFEFF6FF))
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.History,
-                            contentDescription = null,
-                            tint = Color(0xFF2563EB),
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Column {
-                        Text(
-                            text = "My Bookings & Bids",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.5.sp,
-                                color = Color(0xFF1E293B)
-                            )
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "Track 2 pending requests & bids",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontWeight = FontWeight.Normal,
-                                fontSize = 12.5.sp,
-                                color = Color(0xFF64748B)
-                            )
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(10.dp))
-
                 Box(
                     modifier = Modifier
-                        .size(34.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFFF8FAFC)),
+                        .size(54.dp)
+                        .clip(RoundedCornerShape(17.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.ChevronRight,
-                        contentDescription = "View Bookings",
-                        tint = Color(0xFF94A3B8),
-                        modifier = Modifier.size(18.dp)
+                        Icons.Outlined.History,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Your bookings", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
+                    Text(
+                        "Track requests, offers and service progress",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = MaterialTheme.colorScheme.primary)
+            }
+        }
+
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF17264B)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(19.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(13.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.White.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Outlined.Shield, null, tint = Color(0xFFB7F34A), modifier = Modifier.size(25.dp))
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Book with more confidence", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Find service professionals and manage your requests through Fixly.",
+                        color = Color.White.copy(alpha = 0.76f),
+                        style = MaterialTheme.typography.bodySmall,
+                        lineHeight = 18.sp
                     )
                 }
             }
         }
+    }
+}
 
-        // --- TRUST & VERIFICATION BANNER ---
-        TrustVerificationBanner()
+@Composable
+private fun ServiceImageCard(
+    title: String,
+    subtitle: String,
+    imageUrl: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        onClick = onClick,
+        modifier = modifier.height(178.dp),
+        shape = RoundedCornerShape(22.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            SubcomposeAsyncImage(
+                model = imageUrl,
+                contentDescription = title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0f to Color.Transparent,
+                            0.38f to Color(0x33071125),
+                            1f to Color(0xE6071125)
+                        )
+                    )
+            )
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                Text(
+                    title,
+                    color = Color.White,
+                    fontWeight = FontWeight.ExtraBold,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    subtitle,
+                    color = Color.White.copy(alpha = 0.86f),
+                    style = MaterialTheme.typography.labelSmall,
+                    lineHeight = 15.sp
+                )
+            }
+        }
     }
 }
 
 @Composable
 private fun ProviderDashboardView(
+    userName: String?,
     isVerified: Boolean,
     onViewAvailableJobs: () -> Unit,
     onViewAcceptedJobs: () -> Unit
 ) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(20.dp)
-    ) {
-        // VERIFICATION ALERT (IF UNVERIFIED)
+    Column(verticalArrangement = Arrangement.spacedBy(22.dp)) {
+        DashboardGreeting(
+            userName = userName,
+            roleLabel = "FIXLY • PRO WORKSPACE",
+            subtitle = "Your next great job could be one tap away."
+        )
+
         if (!isVerified) {
             Card(
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
-                ),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
+                    modifier = Modifier.padding(17.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(18.dp)
+                    horizontalArrangement = Arrangement.spacedBy(13.dp)
                 ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Info,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Column {
-                        Text(
-                            text = "Verification Pending",
-                            style = MaterialTheme.typography.titleSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "Your certificate is under review. You can still browse available jobs and submit bids.",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontSize = 13.sp,
-                                lineHeight = 17.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        )
+                    Icon(Icons.Outlined.VerifiedUser, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text("Verification in progress", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.ExtraBold)
+                        Text("Your certificate is under review. You can still browse jobs and submit bids.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
         }
 
-        // AVAILABLE JOBS HERO CARD
         Card(
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.Transparent
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+            shape = RoundedCornerShape(32.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        brush = Brush.linearGradient(
-                            colors = listOf(
-                                Color(0xFF2563EB),
-                                Color(0xFF4F46E5),
-                                Color(0xFF1D4ED8)
-                            )
-                        )
-                    )
-                    .padding(22.dp)
+                modifier = Modifier.fillMaxWidth()
+                    .background(Brush.linearGradient(listOf(Color(0xFF111827), Color(0xFF064E3B), Color(0xFF0F766E))))
+                    .padding(24.dp)
             ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = Color.White.copy(alpha = 0.15f),
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f))
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.WorkOutline,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Provider Hub",
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    fontSize = 12.sp
-                                )
-                            )
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Surface(color = Color.White.copy(alpha = 0.14f), shape = RoundedCornerShape(50)) {
+                        Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Outlined.WorkOutline, null, tint = Color(0xFFA7F3D0), modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(7.dp))
+                            Text("YOUR NEXT OPPORTUNITY", color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
                     Text(
-                        text = "Browse Open Jobs",
-                        style = MaterialTheme.typography.headlineSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            fontSize = 24.sp
-                        )
+                        "Find work.\nShow your craft.",
+                        style = MaterialTheme.typography.headlineLarge.copy(color = Color.White, fontWeight = FontWeight.ExtraBold, lineHeight = 39.sp, fontSize = 32.sp)
                     )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
                     Text(
-                        text = "Find home repair requests nearby, view job details, and place your competitive price bids.",
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            color = Color.White.copy(alpha = 0.85f),
-                            fontSize = 14.sp,
-                            lineHeight = 20.sp
-                        )
+                        "Discover nearby service requests and send a competitive bid to customers.",
+                        style = MaterialTheme.typography.bodyMedium.copy(color = Color.White.copy(alpha = 0.84f), lineHeight = 21.sp)
                     )
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
                     Button(
                         onClick = onViewAvailableJobs,
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.White,
-                            contentColor = Color(0xFF1D4ED8)
-                        ),
-                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp),
+                        shape = RoundedCornerShape(17.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFA7F3D0), contentColor = Color(0xFF052E2B)),
+                        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Search,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Browse Available Jobs",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp
-                                )
-                            )
-                        }
+                        Icon(Icons.Outlined.Search, null, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Explore available jobs", fontWeight = FontWeight.ExtraBold)
+                        Spacer(Modifier.weight(1f))
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, null, modifier = Modifier.size(18.dp))
                     }
                 }
             }
         }
 
-        // ACCEPTED JOBS CARD
         Card(
             onClick = onViewAcceptedJobs,
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            ),
-            border = BorderStroke(1.dp, Color(0xFFF1F5F9)),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(
+                modifier = Modifier.fillMaxWidth().padding(18.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(18.dp)
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .size(46.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(Color(0xFFEFF6FF))
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.TaskAlt,
-                            contentDescription = null,
-                            tint = Color(0xFF2563EB),
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Column {
-                        Text(
-                            text = "My Accepted Jobs",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.5.sp,
-                                color = Color(0xFF1E293B)
-                            )
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "View jobs where your bid was selected",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontWeight = FontWeight.Normal,
-                                fontSize = 12.5.sp,
-                                color = Color(0xFF64748B)
-                            )
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(10.dp))
-
                 Box(
-                    modifier = Modifier
-                        .size(34.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFFF8FAFC)),
+                    modifier = Modifier.size(52.dp).clip(RoundedCornerShape(17.dp)).background(MaterialTheme.colorScheme.primaryContainer),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = "View Accepted Jobs",
-                        tint = Color(0xFF94A3B8),
-                        modifier = Modifier.size(18.dp)
-                    )
+                    Icon(Icons.Outlined.AssignmentTurnedIn, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(25.dp))
                 }
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text("Accepted jobs", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
+                    Text("Manage the work you have taken on", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = MaterialTheme.colorScheme.primary)
             }
         }
-
-        // --- TRUST & VERIFICATION BANNER ---
         TrustVerificationBanner()
     }
 }

@@ -111,8 +111,48 @@ fun MyBookingsScreen(
                 }
             }
             uiState.jobs.isEmpty() -> {
-                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    Text("You haven't posted any jobs yet.")
+                Box(
+                    modifier = Modifier.fillMaxSize().padding(padding).padding(28.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.size(76.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Outlined.EventNote,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(34.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            text = "No bookings yet",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Your service requests and their progress will appear here. Start by finding the help you need.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                        Button(
+                            onClick = onHome,
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.padding(top = 4.dp)
+                        ) {
+                            Text("Explore services")
+                        }
+                    }
                 }
             }
             else -> {
@@ -209,14 +249,14 @@ private fun BookingCard(
     val isOpen = job.status == "Open"
 
     val statusContainerColor = when {
-        isOpen -> Color(0xFFD1FAE5)
-        isProgress -> Color(0xFFFEF3C7)
-        else -> Color(0xFFEFF6FF)
+        isOpen -> MaterialTheme.colorScheme.tertiaryContainer
+        isProgress -> MaterialTheme.colorScheme.secondaryContainer
+        else -> MaterialTheme.colorScheme.primaryContainer
     }
     val statusTextColor = when {
-        isOpen -> Color(0xFF059669)
-        isProgress -> Color(0xFFD97706)
-        else -> Color(0xFF2563EB)
+        isOpen -> MaterialTheme.colorScheme.onTertiaryContainer
+        isProgress -> MaterialTheme.colorScheme.onSecondaryContainer
+        else -> MaterialTheme.colorScheme.primary
     }
     val statusText = when {
         isOpen -> "Open for Bids"
@@ -228,7 +268,7 @@ private fun BookingCard(
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -249,13 +289,13 @@ private fun BookingCard(
                         modifier = Modifier
                             .size(44.dp)
                             .clip(RoundedCornerShape(14.dp))
-                            .background(Color(0xFFEFF6FF)),
+                            .background(MaterialTheme.colorScheme.primaryContainer),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = categoryIcon,
                             contentDescription = null,
-                            tint = Color(0xFF2563EB),
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(22.dp)
                         )
                     }
@@ -265,14 +305,14 @@ private fun BookingCard(
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp,
-                                color = Color(0xFF1E293B)
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = "Request ID: #${job.jobId.takeLast(6).uppercase()}",
                             style = MaterialTheme.typography.bodySmall.copy(
-                                color = Color(0xFF64748B),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 12.sp
                             )
                         )
@@ -310,8 +350,8 @@ private fun BookingCard(
             if (job.description.isNotBlank()) {
                 Surface(
                     shape = RoundedCornerShape(14.dp),
-                    color = Color(0xFFF8FAFC),
-                    border = BorderStroke(1.dp, Color(0xFFF1F5F9)),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
