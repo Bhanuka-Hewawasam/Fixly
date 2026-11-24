@@ -1,6 +1,7 @@
 package lk.ac.nibm.hdse.fixly_20.ui.screens
 
 import android.net.Uri
+import androidx.compose.animation.animateContentSize
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -917,6 +918,7 @@ private fun DashboardGreeting(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .animateContentSize()
             .padding(top = 2.dp),
         verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
