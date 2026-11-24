@@ -953,86 +953,185 @@ private fun CustomerDashboardView(
     onPostJob: () -> Unit,
     onViewBookings: () -> Unit
 ) {
+    var searchQuery by remember { mutableStateOf("") }
+    val categories = listOf(
+        Triple("Plumbing", "Leaks, taps & pipes", "https://images.unsplash.com/photo-1607472586893-edb57bdc0e39?w=900&auto=format&fit=crop&q=85"),
+        Triple("Electrical", "Wiring, lights & repairs", "https://images.unsplash.com/photo-1621905251918-48416bd8575a?w=900&auto=format&fit=crop&q=85"),
+        Triple("Cleaning", "A fresher, cleaner home", "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=900&auto=format&fit=crop&q=85"),
+        Triple("Home Repairs", "Fixes around your home", "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=900&auto=format&fit=crop&q=85")
+    )
+    val visibleCategories = categories.filter {
+        it.first.contains(searchQuery.trim(), ignoreCase = true) ||
+            it.second.contains(searchQuery.trim(), ignoreCase = true)
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(22.dp)) {
         DashboardGreeting(
             userName = userName,
-            roleLabel = "FIXLY • HOME SERVICES",
-            subtitle = "Your space deserves the best care."
+            roleLabel = "FIXLY  •  HOME SERVICES",
+            subtitle = "A better way to care for your home."
+        )
+
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            shape = RoundedCornerShape(20.dp),
+            placeholder = { Text("What do you need help with?") },
+            leadingIcon = {
+                Icon(Icons.Outlined.Search, contentDescription = "Search services")
+            },
+            trailingIcon = {
+                IconButton(onClick = onPostJob) {
+                    Icon(Icons.Outlined.Tune, contentDescription = "Browse services")
+                }
+            },
+            colors = OutlinedTextFieldDefaults.colors(
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                focusedBorderColor = MaterialTheme.colorScheme.primary
+            )
         )
 
         Card(
-            shape = RoundedCornerShape(32.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+            shape = RoundedCornerShape(30.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF101B3C)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 5.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(
-                        Brush.linearGradient(
-                            listOf(Color(0xFF111827), Color(0xFF312E81), Color(0xFF2563EB))
-                        )
-                    )
-                    .padding(24.dp)
+                    .heightIn(min = 250.dp)
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                SubcomposeAsyncImage(
+                    model = "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=1200&auto=format&fit=crop&q=90",
+                    contentDescription = "Professional home service technician at work",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.horizontalGradient(
+                                0f to Color(0xFF101B3C),
+                                0.58f to Color(0xE6101B3C),
+                                1f to Color(0x22101B3C)
+                            )
+                        )
+                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth(0.82f)
+                        .padding(horizontal = 22.dp, vertical = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(13.dp)
+                ) {
                     Surface(
                         color = Color.White.copy(alpha = 0.13f),
                         shape = RoundedCornerShape(50),
                         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f))
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                            modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(7.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Icon(Icons.Outlined.ElectricBolt, null, tint = Color(0xFFFDE047), modifier = Modifier.size(15.dp))
-                            Text("THE SMARTER WAY TO FIX IT", color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+                            Icon(
+                                Icons.Outlined.VerifiedUser,
+                                contentDescription = null,
+                                tint = Color(0xFFB7F34A),
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Text(
+                                "TRUSTED LOCAL PROFESSIONALS",
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.6.sp
+                            )
                         }
                     }
                     Text(
-                        "Small problem?\nBig fix. Sorted.",
-                        style = MaterialTheme.typography.headlineLarge.copy(
-                            color = Color.White,
-                            fontWeight = FontWeight.ExtraBold,
-                            lineHeight = 39.sp,
-                            fontSize = 32.sp
-                        )
+                        "Your home.\nOur priority.",
+                        color = Color.White,
+                        fontSize = 31.sp,
+                        lineHeight = 35.sp,
+                        fontWeight = FontWeight.ExtraBold
                     )
                     Text(
-                        "Book trusted local professionals for repairs, maintenance and everyday help.",
-                        style = MaterialTheme.typography.bodyMedium.copy(color = Color.White.copy(alpha = 0.82f), lineHeight = 21.sp)
+                        "Reliable help for everyday repairs and home services, all in one place.",
+                        color = Color.White.copy(alpha = 0.86f),
+                        style = MaterialTheme.typography.bodyMedium,
+                        lineHeight = 21.sp
                     )
                     Button(
                         onClick = onPostJob,
-                        shape = RoundedCornerShape(17.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFDE047), contentColor = Color(0xFF111827)),
-                        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFB7F34A),
+                            contentColor = Color(0xFF14213D)
+                        ),
+                        contentPadding = PaddingValues(horizontal = 17.dp, vertical = 13.dp)
                     ) {
-                        Icon(Icons.Outlined.Add, null, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(8.dp))
                         Text("Post a service request", fontWeight = FontWeight.ExtraBold)
-                        Spacer(Modifier.weight(1f))
-                        Icon(Icons.AutoMirrored.Filled.ArrowForward, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
                     }
                 }
             }
         }
 
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(13.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
                 Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text("What needs fixing?", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onBackground)
-                    Text("Choose a service to get started", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        "What needs fixing?",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Text(
+                        "Choose a service to get started",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-                TextButton(onClick = onPostJob) { Text("View all", fontWeight = FontWeight.Bold) }
+                TextButton(onClick = onPostJob) {
+                    Text("See all", fontWeight = FontWeight.Bold)
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, null, modifier = Modifier.size(16.dp))
+                }
             }
-            val categories = listOf("Plumbing", "Electrical", "Cleaning", "Other")
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                categories.forEach { category ->
-                    CategoryCard(category = category, isSelected = false, onClick = onPostJob, modifier = Modifier.weight(1f))
+
+            if (visibleCategories.isEmpty()) {
+                Text(
+                    "No matching service. Try plumbing, electrical or cleaning.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(vertical = 12.dp)
+                )
+            } else {
+                visibleCategories.chunked(2).forEach { rowItems ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        rowItems.forEach { item ->
+                            ServiceImageCard(
+                                title = item.first,
+                                subtitle = item.second,
+                                imageUrl = item.third,
+                                onClick = onPostJob,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        if (rowItems.size == 1) Spacer(Modifier.weight(1f))
+                    }
                 }
             }
         }
@@ -1050,19 +1149,116 @@ private fun CustomerDashboardView(
                 horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Box(
-                    modifier = Modifier.size(52.dp).clip(RoundedCornerShape(17.dp)).background(MaterialTheme.colorScheme.primaryContainer),
+                    modifier = Modifier
+                        .size(54.dp)
+                        .clip(RoundedCornerShape(17.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Outlined.History, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(25.dp))
+                    Icon(
+                        Icons.Outlined.History,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(26.dp)
+                    )
                 }
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("Your bookings", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
-                    Text("Track requests, offers and service progress", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        "Track requests, offers and service progress",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = MaterialTheme.colorScheme.primary)
             }
         }
-        TrustVerificationBanner()
+
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF17264B)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(19.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(13.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.White.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Outlined.Shield, null, tint = Color(0xFFB7F34A), modifier = Modifier.size(25.dp))
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Book with more confidence", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Find service professionals and manage your requests through Fixly.",
+                        color = Color.White.copy(alpha = 0.76f),
+                        style = MaterialTheme.typography.bodySmall,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ServiceImageCard(
+    title: String,
+    subtitle: String,
+    imageUrl: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        onClick = onClick,
+        modifier = modifier.height(178.dp),
+        shape = RoundedCornerShape(22.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            SubcomposeAsyncImage(
+                model = imageUrl,
+                contentDescription = title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0f to Color.Transparent,
+                            0.38f to Color(0x33071125),
+                            1f to Color(0xE6071125)
+                        )
+                    )
+            )
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                Text(
+                    title,
+                    color = Color.White,
+                    fontWeight = FontWeight.ExtraBold,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    subtitle,
+                    color = Color.White.copy(alpha = 0.86f),
+                    style = MaterialTheme.typography.labelSmall,
+                    lineHeight = 15.sp
+                )
+            }
+        }
     }
 }
 
