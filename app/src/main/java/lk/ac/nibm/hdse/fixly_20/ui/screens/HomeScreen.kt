@@ -173,11 +173,13 @@ fun HomeScreen(
                     // DASHBOARD CONTENT BASED ON ACTIVE ROLE
                     if (uiState.activeRole == "customer") {
                         CustomerDashboardView(
+                            userName = user?.name,
                             onPostJob = onPostJob,
                             onViewBookings = onViewBookings
                         )
                     } else {
                         ProviderDashboardView(
+                            userName = user?.name,
                             isVerified = user?.isVerified ?: false,
                             onViewAvailableJobs = onViewAvailableJobs,
                             onViewAcceptedJobs = onViewAcceptedJobs
@@ -901,13 +903,63 @@ fun HomeScreen(
 }
 
 @Composable
+private fun DashboardGreeting(
+    userName: String?,
+    roleLabel: String,
+    subtitle: String
+) {
+    val firstName = userName
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+        ?.substringBefore(" ")
+        ?: "there"
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        Text(
+            text = roleLabel,
+            style = MaterialTheme.typography.labelSmall.copy(
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.2.sp
+            )
+        )
+        Text(
+            text = "Hello, $firstName 👋",
+            style = MaterialTheme.typography.headlineSmall.copy(
+                color = MaterialTheme.colorScheme.onBackground,
+                fontWeight = FontWeight.Bold
+            )
+        )
+        Text(
+            text = subtitle,
+            style = MaterialTheme.typography.bodyMedium.copy(
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 20.sp
+            )
+        )
+    }
+}
+
+@Composable
 private fun CustomerDashboardView(
+    userName: String?,
     onPostJob: () -> Unit,
     onViewBookings: () -> Unit
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
+        DashboardGreeting(
+            userName = userName,
+            roleLabel = "YOUR HOME, MADE EASIER",
+            subtitle = "Find trusted help for the things that matter."
+        )
+
         // --- PREMIUM HERO BANNER ---
         Card(
             shape = RoundedCornerShape(28.dp),
@@ -1202,6 +1254,7 @@ private fun CustomerDashboardView(
 
 @Composable
 private fun ProviderDashboardView(
+    userName: String?,
     isVerified: Boolean,
     onViewAvailableJobs: () -> Unit,
     onViewAcceptedJobs: () -> Unit
@@ -1209,6 +1262,12 @@ private fun ProviderDashboardView(
     Column(
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
+        DashboardGreeting(
+            userName = userName,
+            roleLabel = "PROVIDER WORKSPACE",
+            subtitle = "Discover work and grow your service business."
+        )
+
         // VERIFICATION ALERT (IF UNVERIFIED)
         if (!isVerified) {
             Card(
