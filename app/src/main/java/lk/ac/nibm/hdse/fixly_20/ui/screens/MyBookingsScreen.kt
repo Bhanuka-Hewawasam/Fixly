@@ -111,8 +111,48 @@ fun MyBookingsScreen(
                 }
             }
             uiState.jobs.isEmpty() -> {
-                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    Text("You haven't posted any jobs yet.")
+                Box(
+                    modifier = Modifier.fillMaxSize().padding(padding).padding(28.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.size(76.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Outlined.EventNote,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(34.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            text = "No bookings yet",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Your service requests and their progress will appear here. Start by finding the help you need.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                        Button(
+                            onClick = onHome,
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.padding(top = 4.dp)
+                        ) {
+                            Text("Explore services")
+                        }
+                    }
                 }
             }
             else -> {
