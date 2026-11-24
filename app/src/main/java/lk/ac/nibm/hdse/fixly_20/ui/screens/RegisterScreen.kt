@@ -120,7 +120,7 @@ fun RegisterScreen(
                         .fillMaxWidth()
                         .background(
                             Brush.linearGradient(
-                                listOf(Color(0xFF111827), Color(0xFF312E81), Color(0xFF2563EB))
+                                listOf(Color(0xFF17153B), Color(0xFF3E2588), Color(0xFF7044F5))
                             )
                         )
                         .padding(20.dp),
