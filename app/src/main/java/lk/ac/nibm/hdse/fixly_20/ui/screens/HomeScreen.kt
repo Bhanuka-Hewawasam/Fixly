@@ -1226,7 +1226,36 @@ private fun ServiceImageCard(
                 model = imageUrl,
                 contentDescription = title,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                loading = {
+                    Box(
+                        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                },
+                error = {
+                    Box(
+                        Modifier.fillMaxSize().background(
+                            Brush.linearGradient(
+                                listOf(Color(0xFFEDE6FF), Color(0xFFDCD0FF))
+                            )
+                        ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "FIXLY",
+                            color = Color(0xFF5131B5),
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 2.sp
+                        )
+                    }
+                }
             )
             Box(
                 modifier = Modifier
@@ -1305,7 +1334,7 @@ private fun ProviderDashboardView(
         ) {
             Box(
                 modifier = Modifier.fillMaxWidth()
-                    .background(Brush.linearGradient(listOf(Color(0xFF111827), Color(0xFF064E3B), Color(0xFF0F766E))))
+                    .background(Brush.linearGradient(listOf(Color(0xFF17153B), Color(0xFF45218E), Color(0xFF7044F5))))
                     .padding(24.dp)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -1388,8 +1417,8 @@ private fun TrustVerificationBanner(
                 .background(
                     brush = Brush.horizontalGradient(
                         colors = listOf(
-                            Color(0xFF0F172A), // Slate 900
-                            Color(0xFF020617)  // Indigo 950
+                            Color(0xFF21164F),
+                            Color(0xFF120F2D)
                         )
                     )
                 )
@@ -1406,7 +1435,7 @@ private fun TrustVerificationBanner(
                         .clip(CircleShape)
                         .background(
                             brush = Brush.linearGradient(
-                                colors = listOf(Color(0xFF3B82F6), Color(0xFF06B6D4))
+                                colors = listOf(Color(0xFF8B5CF6), Color(0xFF5B35D5))
                             )
                         )
                         .padding(2.dp)
@@ -1415,13 +1444,13 @@ private fun TrustVerificationBanner(
                         modifier = Modifier
                             .fillMaxSize()
                             .clip(CircleShape)
-                            .background(Color(0xFF0F172A)),
+                            .background(Color(0xFF21164F)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Security,
                             contentDescription = null,
-                            tint = Color(0xFF60A5FA),
+                            tint = Color(0xFFC4B5FD),
                             modifier = Modifier.size(24.dp)
                         )
                     }
@@ -1445,7 +1474,7 @@ private fun TrustVerificationBanner(
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
                             contentDescription = null,
-                            tint = Color(0xFF60A5FA),
+                            tint = Color(0xFFC4B5FD),
                             modifier = Modifier.size(15.dp)
                         )
                     }
