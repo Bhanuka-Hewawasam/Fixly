@@ -38,13 +38,13 @@ fun FixlyTopBar(
     val initial = (userName?.firstOrNull() ?: 'S').uppercaseChar()
 
     Surface(
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 3.dp,
+        color = MaterialTheme.colorScheme.background,
+        shadowElevation = 0.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
         TopAppBar(
             colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.surface,
+                containerColor = MaterialTheme.colorScheme.background,
                 titleContentColor = MaterialTheme.colorScheme.onSurface
             ),
             navigationIcon = {

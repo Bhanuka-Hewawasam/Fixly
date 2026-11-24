@@ -2,44 +2,44 @@ package lk.ac.nibm.hdse.fixly_20.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Bold Fixly identity — electric indigo, deep ink and a crisp lime accent.
-val FixlyPrimary = Color(0xFF4F46E5)
+// Fixly visual system: confident violet, midnight ink and a soft lilac canvas.
+val FixlyPrimary = Color(0xFF6D3DF5)
 val FixlyOnPrimary = Color(0xFFFFFFFF)
-val FixlyPrimaryContainer = Color(0xFFEDEBFF)
-val FixlyOnPrimaryContainer = Color(0xFF312E81)
+val FixlyPrimaryContainer = Color(0xFFEDE6FF)
+val FixlyOnPrimaryContainer = Color(0xFF351477)
 
-val FixlyNavy = Color(0xFF111827)
-val FixlyNavyLight = Color(0xFF26324A)
+val FixlyNavy = Color(0xFF17153B)
+val FixlyNavyLight = Color(0xFF302B59)
 val FixlyOnNavy = Color(0xFFFFFFFF)
 
-val FixlySuccess = Color(0xFF0F9F78)
-val FixlySuccessContainer = Color(0xFFDDF7ED)
-val FixlyOnSuccessContainer = Color(0xFF075C43)
+val FixlySuccess = Color(0xFF16A66A)
+val FixlySuccessContainer = Color(0xFFE0F7EC)
+val FixlyOnSuccessContainer = Color(0xFF075B39)
 
-val FixlyEmergency = Color(0xFFE5484D)
-val FixlyEmergencyContainer = Color(0xFFFFE8E8)
-val FixlyOnEmergencyContainer = Color(0xFF9F2028)
+val FixlyEmergency = Color(0xFFE54858)
+val FixlyEmergencyContainer = Color(0xFFFFE9EC)
+val FixlyOnEmergencyContainer = Color(0xFF9F2434)
 
-val FixlyWarning = Color(0xFFE59A22)
-val FixlyWarningContainer = Color(0xFFFFF3D8)
+val FixlyWarning = Color(0xFFE7A12B)
+val FixlyWarningContainer = Color(0xFFFFF3DA)
 
-val FixlyBackgroundLight = Color(0xFFF6F8FC)
+val FixlyBackgroundLight = Color(0xFFF8F7FC)
 val FixlySurfaceLight = Color(0xFFFFFFFF)
-val FixlySurfaceVariantLight = Color(0xFFEEF2F8)
+val FixlySurfaceVariantLight = Color(0xFFF0EDFA)
 
-val FixlyOnSurfaceLight = Color(0xFF17233B)
-val FixlyOnSurfaceVariantLight = Color(0xFF68758D)
-val FixlyOutlineLight = Color(0xFFE1E7F0)
+val FixlyOnSurfaceLight = Color(0xFF19172F)
+val FixlyOnSurfaceVariantLight = Color(0xFF77738E)
+val FixlyOutlineLight = Color(0xFFE6E1F0)
 
-// Dark palette — avoid pure black and preserve readable contrast.
-val FixlyBackgroundDark = Color(0xFF0C1220)
-val FixlySurfaceDark = Color(0xFF151E30)
-val FixlySurfaceVariantDark = Color(0xFF202C42)
+// Dark palette — preserve the same violet identity with accessible contrast.
+val FixlyBackgroundDark = Color(0xFF100F20)
+val FixlySurfaceDark = Color(0xFF1A1830)
+val FixlySurfaceVariantDark = Color(0xFF292642)
 
-val FixlyPrimaryDark = Color(0xFFA5B4FC)
-val FixlyPrimaryContainerDark = Color(0xFF3730A3)
-val FixlyOnPrimaryContainerDark = Color(0xFFE3EAFF)
+val FixlyPrimaryDark = Color(0xFFBBA5FF)
+val FixlyPrimaryContainerDark = Color(0xFF49318A)
+val FixlyOnPrimaryContainerDark = Color(0xFFEDE6FF)
 
-val FixlyOnSurfaceDark = Color(0xFFF3F6FC)
-val FixlyOnSurfaceVariantDark = Color(0xFFABB7CC)
-val FixlyOutlineDark = Color(0xFF34435B)
+val FixlyOnSurfaceDark = Color(0xFFF7F5FF)
+val FixlyOnSurfaceVariantDark = Color(0xFFB8B3CE)
+val FixlyOutlineDark = Color(0xFF3B3754)
