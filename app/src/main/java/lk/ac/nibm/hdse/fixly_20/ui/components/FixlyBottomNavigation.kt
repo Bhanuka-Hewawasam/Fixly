@@ -10,9 +10,9 @@ import androidx.compose.material.icons.filled.Work
 import androidx.compose.material.icons.outlined.Handyman
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.*
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -20,8 +20,8 @@ import androidx.compose.ui.unit.sp
 
 sealed class BottomNavItem(val route: String, val title: String, val icon: ImageVector) {
     object Home : BottomNavItem("home", "Home", Icons.Default.Home)
-    object History : BottomNavItem("my_bookings", "History", Icons.AutoMirrored.Filled.ListAlt)
-    object AvailableJobs : BottomNavItem("available_jobs", "Jobs", Icons.Default.Work)
+    object History : BottomNavItem("my_bookings", "Bookings", Icons.AutoMirrored.Filled.ListAlt)
+    object AvailableJobs : BottomNavItem("available_jobs", "Find Jobs", Icons.Default.Work)
     object MyWork : BottomNavItem("accepted_jobs", "My Work", Icons.Outlined.Handyman)
     object Emergency : BottomNavItem("emergency_sos", "Emergency", Icons.Default.Emergency)
     object Profile : BottomNavItem("profile", "Profile", Icons.Outlined.Person)
@@ -42,8 +42,8 @@ fun FixlyBottomNavBar(
 
     Surface(
         color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 4.dp,
-        shadowElevation = 12.dp,
+        shadowElevation = 14.dp,
+        tonalElevation = 0.dp,
         modifier = modifier
     ) {
         NavigationBar(
@@ -54,10 +54,6 @@ fun FixlyBottomNavBar(
         ) {
             items.forEach { item ->
                 val selected = currentRoute == item.route
-                val iconTint by animateColorAsState(
-                    targetValue = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    label = "bottomNavIconTint"
-                )
                 NavigationBarItem(
                     selected = selected,
                     onClick = { if (!selected) onNavigate(item.route) },
@@ -65,12 +61,10 @@ fun FixlyBottomNavBar(
                         Icon(
                             imageVector = item.icon,
                             contentDescription = item.title,
-                            tint = if (item == BottomNavItem.Emergency && selected) {
-                                MaterialTheme.colorScheme.error
-                            } else if (selected) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = when {
+                                item == BottomNavItem.Emergency && selected -> MaterialTheme.colorScheme.error
+                                selected -> MaterialTheme.colorScheme.primary
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
                             }
                         )
                     },
@@ -79,10 +73,11 @@ fun FixlyBottomNavBar(
                             text = item.title,
                             style = MaterialTheme.typography.labelMedium.copy(
                                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                fontSize = 12.sp
+                                fontSize = 11.sp
                             )
                         )
                     },
+                    alwaysShowLabel = true,
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = MaterialTheme.colorScheme.primary,
                         selectedTextColor = MaterialTheme.colorScheme.primary,
