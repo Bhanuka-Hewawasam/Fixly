@@ -3,7 +3,7 @@ package lk.ac.nibm.hdse.fixly_20.ui.components
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ListAlt
+import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Emergency
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Work
@@ -12,7 +12,6 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -20,7 +19,7 @@ import androidx.compose.ui.unit.sp
 
 sealed class BottomNavItem(val route: String, val title: String, val icon: ImageVector) {
     object Home : BottomNavItem("home", "Home", Icons.Default.Home)
-    object History : BottomNavItem("my_bookings", "Bookings", Icons.AutoMirrored.Filled.ListAlt)
+    object History : BottomNavItem("my_bookings", "Bookings", Icons.Filled.ReceiptLong)
     object AvailableJobs : BottomNavItem("available_jobs", "Find Jobs", Icons.Default.Work)
     object MyWork : BottomNavItem("accepted_jobs", "My Work", Icons.Outlined.Handyman)
     object Emergency : BottomNavItem("emergency_sos", "Emergency", Icons.Default.Emergency)
@@ -42,7 +41,7 @@ fun FixlyBottomNavBar(
 
     Surface(
         color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 14.dp,
+        shadowElevation = 10.dp,
         tonalElevation = 0.dp,
         modifier = modifier
     ) {
@@ -78,6 +77,7 @@ fun FixlyBottomNavBar(
                         )
                     },
                     alwaysShowLabel = true,
+                    modifier = Modifier,
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = MaterialTheme.colorScheme.primary,
                         selectedTextColor = MaterialTheme.colorScheme.primary,
