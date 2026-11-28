@@ -43,8 +43,12 @@ fun JobBidsScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                ),
                 title = { Text("Bids Received", fontWeight = FontWeight.Bold, fontSize = 20.sp) },
                 navigationIcon = {
                     Surface(
@@ -176,7 +180,7 @@ private fun BidCard(
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -195,14 +199,14 @@ private fun BidCard(
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 17.sp,
-                            color = Color(0xFF1E293B)
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = if (ratingCount > 0) formatRating(ratingAvg, ratingCount) else "New provider · no reviews yet",
                         style = MaterialTheme.typography.bodySmall.copy(
-                            color = Color(0xFF64748B),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 12.5.sp
                         )
                     )
@@ -237,13 +241,13 @@ private fun BidCard(
                     if (hasCertificate) {
                         Surface(
                             shape = RoundedCornerShape(50),
-                            color = Color(0xFFEFF6FF)
+                            color = MaterialTheme.colorScheme.primaryContainer
                         ) {
                             Text(
                                 text = "Certificate attached",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF2563EB),
+                                    color = MaterialTheme.colorScheme.primary,
                                     fontSize = 11.5.sp
                                 ),
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
@@ -258,7 +262,7 @@ private fun BidCard(
                 text = "Rs. ${"%.1f".format(bid.price)}",
                 style = MaterialTheme.typography.headlineMedium.copy(
                     fontWeight = FontWeight.ExtraBold,
-                    color = Color(0xFF1E293B),
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontSize = 24.sp
                 )
             )
@@ -267,26 +271,26 @@ private fun BidCard(
                 bid.distanceKm?.let { dist ->
                     Text(
                         text = "Distance: ${String.format(java.util.Locale.getDefault(), "%.1f", dist)} km",
-                        style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF64748B), fontSize = 13.sp)
+                        style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
                     )
                 }
                 Text(
                     text = bid.estimatedArrivalMinutes?.let { "Arrives in ~$it min" } ?: "ETA: Not provided",
-                    style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF64748B), fontSize = 13.sp)
+                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
                 )
             }
 
             if (bid.message.isNotBlank()) {
                 Surface(
                     shape = RoundedCornerShape(14.dp),
-                    color = Color(0xFFF8FAFC),
-                    border = BorderStroke(1.dp, Color(0xFFF1F5F9)),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.surfaceVariant),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
                         text = bid.message,
                         style = MaterialTheme.typography.bodyMedium.copy(
-                            color = Color(0xFF475569),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 13.5.sp
                         ),
                         modifier = Modifier.padding(14.dp)
@@ -312,7 +316,7 @@ private fun BidCard(
                 onClick = onSelect,
                 enabled = !isSelecting && canSelect,
                 shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 modifier = Modifier.fillMaxWidth().height(48.dp)
             ) {
                 if (isSelecting) {
