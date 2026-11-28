@@ -122,27 +122,42 @@ fun FixlyTopBar(
                             model = profilePictureUrl,
                             contentDescription = "Profile photo",
                             contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                            loading = {
-                                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primaryContainer)) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.align(Alignment.Center).size(16.dp),
-                                        strokeWidth = 2.dp
-                                    )
-                                }
-                            }
+                            modifier = Modifier.fillMaxSize()
                         ) {
                             val state = painter.state
-                            if (state is AsyncImagePainter.State.Error) {
-                                Text(
-                                    text = initial.toString(),
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                )
-                            } else {
-                                SubcomposeAsyncImageContent()
+                            when (state) {
+                                is AsyncImagePainter.State.Loading -> {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(MaterialTheme.colorScheme.primaryContainer),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            strokeWidth = 2.dp
+                                        )
+                                    }
+                                }
+                                is AsyncImagePainter.State.Error -> {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(MaterialTheme.colorScheme.primary),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = initial.toString(),
+                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        )
+                                    }
+                                }
+                                else -> {
+                                    SubcomposeAsyncImageContent()
+                                }
                             }
                         }
                     } else {

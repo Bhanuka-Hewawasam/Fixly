@@ -119,7 +119,7 @@ fun RegisterScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(
-                            Brush.linearGradient(
+                            androidx.compose.ui.graphics.Brush.linearGradient(
                                 listOf(Color(0xFF17153B), Color(0xFF3E2588), Color(0xFF7044F5))
                             )
                         )
