@@ -222,6 +222,7 @@ fun ProfileScreen(
     val isProvider = uiState.user?.roles?.contains("provider") == true
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = { Text("Profile", fontWeight = FontWeight.Bold, fontSize = 20.sp) },
@@ -281,7 +282,7 @@ fun ProfileScreen(
                             .fillMaxWidth()
                             .background(
                                 Brush.linearGradient(
-                                    listOf(Color(0xFF111827), Color(0xFF312E81), Color(0xFF2563EB))
+                                    listOf(MaterialTheme.colorScheme.secondary, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primary.copy(alpha = 0.82f))
                                 )
                             )
                             .padding(22.dp),
@@ -290,7 +291,7 @@ fun ProfileScreen(
                         Text(
                             text = "YOUR FIXLY SPACE",
                             style = MaterialTheme.typography.labelSmall.copy(
-                                color = Color(0xFFBFDBFE),
+                                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.82f),
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 1.2.sp
                             )
@@ -317,7 +318,7 @@ fun ProfileScreen(
                     shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -340,7 +341,7 @@ fun ProfileScreen(
                                         .clip(CircleShape)
                                         .background(
                                             brush = Brush.linearGradient(
-                                                colors = listOf(Color(0xFF2563EB), Color(0xFF4F46E5))
+                                                colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)
                                             )
                                         )
                                 ) {
@@ -356,7 +357,7 @@ fun ProfileScreen(
                                     modifier = Modifier
                                         .size(20.dp)
                                         .clip(CircleShape)
-                                        .background(Color(0xFF10B981)),
+                                        .background(MaterialTheme.colorScheme.tertiary),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
@@ -423,8 +424,8 @@ fun ProfileScreen(
                         // User Stats Summary Strip
                         Surface(
                             shape = RoundedCornerShape(16.dp),
-                            color = Color(0xFFF8FAFC),
-                            border = BorderStroke(1.dp, Color(0xFFF1F5F9)),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.surfaceVariant),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
@@ -435,9 +436,9 @@ fun ProfileScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 StatItem(value = "0", label = "Jobs Posted")
-                                VerticalDivider(modifier = Modifier.height(28.dp), color = Color(0xFFE2E8F0))
+                                VerticalDivider(modifier = Modifier.height(28.dp), color = MaterialTheme.colorScheme.outlineVariant)
                                 StatItem(value = "${providerReviews.size}", label = "Reviews")
-                                VerticalDivider(modifier = Modifier.height(28.dp), color = Color(0xFFE2E8F0))
+                                VerticalDivider(modifier = Modifier.height(28.dp), color = MaterialTheme.colorScheme.outlineVariant)
                                 StatItem(value = "★ 5.0", label = "Rating")
                             }
                         }
@@ -450,7 +451,7 @@ fun ProfileScreen(
                         shape = RoundedCornerShape(24.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                        border = BorderStroke(1.dp, Color(0xFF2563EB)),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { isBecomingProvider = !isBecomingProvider }
@@ -586,7 +587,7 @@ fun ProfileScreen(
                                     Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                                 }
                                 uiState.successMessage?.let {
-                                    Text(it, color = Color(0xFF10B981), style = MaterialTheme.typography.bodySmall)
+                                    Text(it, color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.bodySmall)
                                 }
 
                                 Button(
@@ -618,7 +619,7 @@ fun ProfileScreen(
                                     Button(
                                         onClick = { onNavigate("profile/provider") },
                                         shape = RoundedCornerShape(14.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
                                         modifier = Modifier.fillMaxWidth().height(48.dp)
                                     ) {
                                         Text("Switch to Provider Dashboard")
@@ -635,7 +636,7 @@ fun ProfileScreen(
                         shape = RoundedCornerShape(24.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                        border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                     ) {
                         Column(
                             modifier = Modifier.padding(20.dp),
@@ -779,7 +780,7 @@ fun ProfileScreen(
                                 Text(it, color = MaterialTheme.colorScheme.error)
                             }
                             uiState.successMessage?.let {
-                                Text(it, color = Color(0xFF10B981))
+                                Text(it, color = MaterialTheme.colorScheme.tertiary)
                             }
                             if (uiState.saved) {
                                 Text("Service profile saved.", color = MaterialTheme.colorScheme.primary)
@@ -828,7 +829,7 @@ fun ProfileScreen(
                     shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -839,7 +840,7 @@ fun ProfileScreen(
                             title = "Account Details",
                             onClick = { showAccountDetailsDialog = true }
                         )
-                        HorizontalDivider(color = Color(0xFFF1F5F9), modifier = Modifier.padding(horizontal = 20.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.padding(horizontal = 20.dp))
                         QuickLinkItem(
                             icon = Icons.Outlined.Security,
                             title = "Privacy & Security",
@@ -888,12 +889,12 @@ fun ProfileScreen(
                             Text(
                                 text = if (isEditingAccountDetails) "Cancel" else "Edit Profile",
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF2563EB)
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
                     }
 
-                    HorizontalDivider(color = Color(0xFFE2E8F0))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
                     if (isEditingAccountDetails) {
                         OutlinedTextField(
@@ -917,7 +918,7 @@ fun ProfileScreen(
                             Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                         }
                         uiState.successMessage?.let {
-                            Text(it, color = Color(0xFF10B981), style = MaterialTheme.typography.bodySmall)
+                            Text(it, color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.bodySmall)
                         }
 
                         Button(
@@ -945,17 +946,17 @@ fun ProfileScreen(
                             Icon(
                                 imageVector = Icons.Outlined.Person,
                                 contentDescription = null,
-                                tint = Color(0xFF2563EB),
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
                             Column {
                                 Text(
                                     text = "Name",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF64748B), fontSize = 11.5.sp)
+                                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.5.sp)
                                 )
                                 Text(
                                     text = uiState.user?.name.orEmpty().ifBlank { "Not provided" },
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp, color = Color(0xFF1E293B))
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp, color = MaterialTheme.colorScheme.onSurface)
                                 )
                             }
                         }
@@ -969,17 +970,17 @@ fun ProfileScreen(
                             Icon(
                                 imageVector = Icons.Outlined.Phone,
                                 contentDescription = null,
-                                tint = Color(0xFF2563EB),
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
                             Column {
                                 Text(
                                     text = "Phone",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF64748B), fontSize = 11.5.sp)
+                                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.5.sp)
                                 )
                                 Text(
                                     text = uiState.user?.phoneNumber.orEmpty().ifBlank { "Not provided" },
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp, color = Color(0xFF1E293B))
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp, color = MaterialTheme.colorScheme.onSurface)
                                 )
                             }
                         }
@@ -993,23 +994,23 @@ fun ProfileScreen(
                             Icon(
                                 imageVector = Icons.Outlined.Email,
                                 contentDescription = null,
-                                tint = Color(0xFF2563EB),
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
                             Column {
                                 Text(
                                     text = "Email",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF64748B), fontSize = 11.5.sp)
+                                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.5.sp)
                                 )
                                 Text(
                                     text = "${uiState.user?.email.orEmpty().ifBlank { "Not available" }} (Cannot be changed)",
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp, color = Color(0xFF1E293B))
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp, color = MaterialTheme.colorScheme.onSurface)
                                 )
                             }
                         }
 
                         uiState.successMessage?.let {
-                            Text(it, color = Color(0xFF10B981), style = MaterialTheme.typography.bodySmall)
+                            Text(it, color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.bodySmall)
                         }
                     }
 
@@ -1046,11 +1047,11 @@ fun ProfileScreen(
                         }
                     }
 
-                    HorizontalDivider(color = Color(0xFFE2E8F0))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
                     Text(
                         text = "Your account uses Firebase Authentication. Location and service-request data are handled according to the app's Firebase security rules and privacy settings. Avoid sharing sensitive information in public service descriptions.",
-                        style = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFF475569))
+                        style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -1083,7 +1084,7 @@ fun ProfileScreen(
                         }
                     }
 
-                    HorizontalDivider(color = Color(0xFFE2E8F0))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
                     // Dark Mode Toggle Row
                     Row(
@@ -1148,8 +1149,8 @@ fun ProfileScreen(
 
                     Surface(
                         shape = RoundedCornerShape(16.dp),
-                        color = Color(0xFFF8FAFC),
-                        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(
@@ -1158,11 +1159,11 @@ fun ProfileScreen(
                         ) {
                             Text(
                                 text = "Fixly App Version",
-                                style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF64748B), fontWeight = FontWeight.Bold)
+                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
                             )
                             Text(
                                 text = "Development build",
-                                style = MaterialTheme.typography.titleSmall.copy(color = Color(0xFF1E293B), fontWeight = FontWeight.Bold)
+                                style = MaterialTheme.typography.titleSmall.copy(color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
                             )
                         }
                     }
@@ -1184,7 +1185,7 @@ private fun StatItem(value: String, label: String) {
             text = value,
             style = MaterialTheme.typography.titleMedium.copy(
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF1E293B),
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 16.sp
             )
         )
@@ -1192,7 +1193,7 @@ private fun StatItem(value: String, label: String) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall.copy(
-                color = Color(0xFF64748B),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 11.5.sp
             )
         )
@@ -1225,13 +1226,13 @@ private fun QuickLinkItem(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFFEFF6FF)),
+                        .background(MaterialTheme.colorScheme.primaryContainer),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = Color(0xFF2563EB),
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -1240,14 +1241,14 @@ private fun QuickLinkItem(
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 15.sp,
-                        color = Color(0xFF1E293B)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 )
             }
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                 contentDescription = null,
-                tint = Color(0xFF94A3B8),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(18.dp)
             )
         }
@@ -1268,7 +1269,7 @@ private fun ProviderReviewsSection(
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -1285,13 +1286,13 @@ private fun ProviderReviewsSection(
                     style = MaterialTheme.typography.titleLarge.copy(
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp,
-                        color = Color(0xFF1E293B)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 )
                 Text(
                     text = "${reviews.size} Reviews",
                     style = MaterialTheme.typography.bodySmall.copy(
-                        color = Color(0xFF64748B),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Medium
                     )
                 )
@@ -1335,7 +1336,7 @@ private fun ProviderReviewsSection(
                 ) {
                     Text(
                         text = "No reviews for this category yet.",
-                        style = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFF64748B))
+                        style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                     )
                 }
             } else {
@@ -1343,8 +1344,8 @@ private fun ProviderReviewsSection(
                     filteredReviews.forEach { review ->
                         Surface(
                             shape = RoundedCornerShape(16.dp),
-                            color = Color(0xFFF8FAFC),
-                            border = BorderStroke(1.dp, Color(0xFFF1F5F9)),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.surfaceVariant),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1357,7 +1358,7 @@ private fun ProviderReviewsSection(
                                         text = review.serviceCategory,
                                         style = MaterialTheme.typography.titleSmall.copy(
                                             fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF2563EB)
+                                            color = MaterialTheme.colorScheme.primary
                                         )
                                     )
                                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1372,7 +1373,7 @@ private fun ProviderReviewsSection(
                                             text = "${review.rating}.0",
                                             style = MaterialTheme.typography.titleSmall.copy(
                                                 fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF1E293B)
+                                                color = MaterialTheme.colorScheme.onSurface
                                             )
                                         )
                                     }
@@ -1381,7 +1382,7 @@ private fun ProviderReviewsSection(
                                     Text(
                                         text = review.comment,
                                         style = MaterialTheme.typography.bodyMedium.copy(
-                                            color = Color(0xFF334155),
+                                            color = MaterialTheme.colorScheme.onSurface,
                                             fontSize = 14.sp
                                         )
                                     )

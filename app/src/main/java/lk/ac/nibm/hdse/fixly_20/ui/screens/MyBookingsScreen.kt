@@ -358,7 +358,7 @@ private fun BookingCard(
                         text = "\"${job.description}\"",
                         style = MaterialTheme.typography.bodyMedium.copy(
                             fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                            color = Color(0xFF475569),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 13.5.sp
                         ),
                         modifier = Modifier.padding(14.dp)
@@ -383,13 +383,13 @@ private fun BookingCard(
                             modifier = Modifier
                                 .size(36.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFFF1F5F9)),
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.Person,
                                 contentDescription = null,
-                                tint = Color(0xFF64748B),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -397,7 +397,7 @@ private fun BookingCard(
                             Text(
                                 text = "Assigned Provider",
                                 style = MaterialTheme.typography.bodySmall.copy(
-                                    color = Color(0xFF64748B),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 11.5.sp
                                 )
                             )
@@ -406,7 +406,7 @@ private fun BookingCard(
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp,
-                                    color = Color(0xFF1E293B)
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                             )
                         }
@@ -420,7 +420,7 @@ private fun BookingCard(
                                 "No reviews yet"
                             },
                             style = MaterialTheme.typography.bodySmall.copy(
-                                color = Color(0xFF64748B),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 12.sp
                             )
                         )
@@ -429,7 +429,7 @@ private fun BookingCard(
                                 text = "Rs. ${"%.2f".format(it)}",
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF2563EB),
+                                    color = MaterialTheme.colorScheme.primary,
                                     fontSize = 13.5.sp
                                 )
                             )
@@ -439,8 +439,8 @@ private fun BookingCard(
             } else if (isOpen) {
                 Surface(
                     shape = RoundedCornerShape(14.dp),
-                    color = Color(0xFFF8FAFC),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    color = MaterialTheme.colorScheme.background,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -457,14 +457,14 @@ private fun BookingCard(
                             Icon(
                                 imageVector = Icons.Outlined.Handyman,
                                 contentDescription = null,
-                                tint = Color(0xFF2563EB),
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(18.dp)
                             )
                             Text(
                                 text = "Providers Bidding",
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF1E293B),
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     fontSize = 13.sp
                                 )
                             )
@@ -472,7 +472,7 @@ private fun BookingCard(
                         Text(
                             text = "Active bids available",
                             style = MaterialTheme.typography.bodySmall.copy(
-                                color = Color(0xFF2563EB),
+                                color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 12.5.sp
                             )
@@ -512,7 +512,7 @@ private fun BookingCard(
                     Button(
                         onClick = onViewBids,
                         shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                         modifier = Modifier.fillMaxWidth().height(48.dp)
                     ) {
                         Icon(Icons.Outlined.Visibility, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -524,7 +524,7 @@ private fun BookingCard(
                     Button(
                         onClick = onTrack,
                         shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                         modifier = Modifier.fillMaxWidth().height(48.dp)
                     ) {
                         Icon(Icons.Outlined.Navigation, contentDescription = null, modifier = Modifier.size(18.dp))

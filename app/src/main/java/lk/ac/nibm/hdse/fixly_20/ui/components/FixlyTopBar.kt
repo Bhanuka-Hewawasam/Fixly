@@ -2,6 +2,7 @@ package lk.ac.nibm.hdse.fixly_20.ui.components
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -14,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -38,13 +40,14 @@ fun FixlyTopBar(
     val initial = (userName?.firstOrNull() ?: 'S').uppercaseChar()
 
     Surface(
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 3.dp,
+        color = MaterialTheme.colorScheme.background,
+        shadowElevation = 0.dp,
+        tonalElevation = 0.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
         TopAppBar(
             colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.surface,
+                containerColor = MaterialTheme.colorScheme.background,
                 titleContentColor = MaterialTheme.colorScheme.onSurface
             ),
             navigationIcon = {
@@ -68,8 +71,8 @@ fun FixlyTopBar(
                     text = title,
                     style = MaterialTheme.typography.titleLarge.copy(
                         fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp,
-                        letterSpacing = (-0.35).sp,
+                        fontSize = 21.sp,
+                        letterSpacing = (-0.45).sp,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 )
@@ -99,11 +102,10 @@ fun FixlyTopBar(
                 Box(
                     modifier = Modifier
                         .padding(end = 16.dp)
-                        .size(40.dp)
+                        .size(42.dp)
                         .border(
-                            width = 2.dp,
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = CircleShape
+                            BorderStroke(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)),
+                            CircleShape
                         )
                         .padding(2.dp)
                         .clip(CircleShape)
@@ -120,7 +122,15 @@ fun FixlyTopBar(
                             model = profilePictureUrl,
                             contentDescription = "Profile photo",
                             contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize(),
+                            loading = {
+                                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primaryContainer)) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.align(Alignment.Center).size(16.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                }
+                            }
                         ) {
                             val state = painter.state
                             if (state is AsyncImagePainter.State.Error) {

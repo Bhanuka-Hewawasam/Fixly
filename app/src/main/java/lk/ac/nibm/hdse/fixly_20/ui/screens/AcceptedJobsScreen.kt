@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.WorkOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -43,9 +44,13 @@ fun AcceptedJobsScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                ),
                 title = { Text("My Accepted Jobs", fontWeight = FontWeight.Bold, fontSize = 20.sp) },
                 navigationIcon = {
                     Surface(
@@ -68,16 +73,82 @@ fun AcceptedJobsScreen(
                 }
             }
             uiState.jobs.isEmpty() -> {
-                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    Text("Jobs you accept or win through bids will show up here.")
+                Box(
+                    Modifier.fillMaxSize().padding(padding).padding(28.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.size(76.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Outlined.WorkOutline,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(34.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            "No accepted jobs yet",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            "Jobs you accept or win through bids will appear here, ready for you to manage.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
                 }
             }
             else -> {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize().padding(padding),
-                    contentPadding = PaddingValues(20.dp),
+                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    "Your active work",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    "Keep track of the jobs you've accepted",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = MaterialTheme.colorScheme.primaryContainer
+                            ) {
+                                Text(
+                                    "${uiState.jobs.size} ACTIVE",
+                                    modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
+                    }
                     items(uiState.jobs) { job ->
                         AcceptedJobCard(
                             job = job,
@@ -143,7 +214,7 @@ fun AcceptedJobsScreen(
                     },
                     enabled = uiState.cancellingJobId == null,
                     modifier = Modifier.fillMaxWidth()
-                ) { Text("Keep booking", fontWeight = FontWeight.SemiBold, color = Color(0xFF2563EB)) }
+                ) { Text("Keep booking", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary) }
             }
         )
     }
@@ -160,7 +231,7 @@ private fun AcceptedJobCard(
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
     ) {
         Column(
@@ -177,19 +248,19 @@ private fun AcceptedJobCard(
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,
                         fontSize = 17.sp,
-                        color = Color(0xFF1E293B)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 )
 
                 Surface(
                     shape = RoundedCornerShape(50),
-                    color = Color(0xFFD1FAE5)
+                    color = MaterialTheme.colorScheme.tertiaryContainer
                 ) {
                     Text(
                         text = job.status,
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF059669),
+                            color = MaterialTheme.colorScheme.tertiary,
                             fontSize = 11.5.sp
                         ),
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
@@ -201,7 +272,7 @@ private fun AcceptedJobCard(
                 Text(
                     text = job.description,
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        color = Color(0xFF334155),
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 14.sp
                     ),
                     maxLines = 2
@@ -213,7 +284,7 @@ private fun AcceptedJobCard(
                     Text(
                         text = "📍 ${job.address}",
                         style = MaterialTheme.typography.bodySmall.copy(
-                            color = Color(0xFF64748B),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 12.5.sp
                         ),
                         maxLines = 1
@@ -222,7 +293,7 @@ private fun AcceptedJobCard(
                 Text(
                     text = "Customer: ${job.customerName.ifBlank { "Customer" }}",
                     style = MaterialTheme.typography.bodySmall.copy(
-                        color = Color(0xFF64748B),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 12.5.sp
                     )
                 )
@@ -234,10 +305,10 @@ private fun AcceptedJobCard(
                     onClick = onCancel,
                     enabled = !isCancelling,
                     shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, Color(0xFFCBD5E1)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                     colors = ButtonDefaults.outlinedButtonColors(
                         containerColor = MaterialTheme.colorScheme.surface,
-                        contentColor = Color(0xFF2563EB)
+                        contentColor = MaterialTheme.colorScheme.primary
                     ),
                     modifier = Modifier.fillMaxWidth().height(46.dp)
                 ) {

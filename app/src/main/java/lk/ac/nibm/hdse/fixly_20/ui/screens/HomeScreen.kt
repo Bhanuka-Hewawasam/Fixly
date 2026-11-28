@@ -5,6 +5,7 @@ import androidx.compose.animation.animateContentSize
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -27,6 +28,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -40,6 +42,7 @@ import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
 import kotlinx.coroutines.delay
 import lk.ac.nibm.hdse.fixly_20.BuildConfig
+import lk.ac.nibm.hdse.fixly_20.R
 import lk.ac.nibm.hdse.fixly_20.data.repository.EmergencyAlertRepository
 import lk.ac.nibm.hdse.fixly_20.ui.components.CategoryCard
 import lk.ac.nibm.hdse.fixly_20.ui.components.EmergencyChip
@@ -983,8 +986,10 @@ private fun CustomerDashboardView(
                 Icon(Icons.Outlined.Search, contentDescription = "Search services")
             },
             trailingIcon = {
-                IconButton(onClick = onPostJob) {
-                    Icon(Icons.Outlined.Tune, contentDescription = "Browse services")
+                if (searchQuery.isNotBlank()) {
+                    IconButton(onClick = { searchQuery = "" }) {
+                        Icon(Icons.Outlined.Close, contentDescription = "Clear search")
+                    }
                 }
             },
             colors = OutlinedTextFieldDefaults.colors(
@@ -1006,9 +1011,9 @@ private fun CustomerDashboardView(
                     .fillMaxWidth()
                     .heightIn(min = 250.dp)
             ) {
-                SubcomposeAsyncImage(
-                    model = "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=1200&auto=format&fit=crop&q=90",
-                    contentDescription = "Professional home service technician at work",
+                Image(
+                    painter = painterResource(id = R.drawable.real_service_provider),
+                    contentDescription = "Fixly home service professional",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -1042,7 +1047,7 @@ private fun CustomerDashboardView(
                             Icon(
                                 Icons.Outlined.VerifiedUser,
                                 contentDescription = null,
-                                tint = Color(0xFFB7F34A),
+                                tint = Color(0xFFD6C8FF),
                                 modifier = Modifier.size(15.dp)
                             )
                             Text(
@@ -1071,8 +1076,8 @@ private fun CustomerDashboardView(
                         onClick = onPostJob,
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFB7F34A),
-                            contentColor = Color(0xFF14213D)
+                            containerColor = Color(0xFFD6C8FF),
+                            contentColor = Color(0xFF21164F)
                         ),
                         contentPadding = PaddingValues(horizontal = 17.dp, vertical = 13.dp)
                     ) {
@@ -1191,7 +1196,7 @@ private fun CustomerDashboardView(
                         .background(Color.White.copy(alpha = 0.12f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Outlined.Shield, null, tint = Color(0xFFB7F34A), modifier = Modifier.size(25.dp))
+                    Icon(Icons.Outlined.Shield, null, tint = Color(0xFFD6C8FF), modifier = Modifier.size(25.dp))
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("Book with more confidence", color = Color.White, fontWeight = FontWeight.Bold)
@@ -1226,7 +1231,36 @@ private fun ServiceImageCard(
                 model = imageUrl,
                 contentDescription = title,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                loading = {
+                    Box(
+                        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                },
+                error = {
+                    Box(
+                        Modifier.fillMaxSize().background(
+                            Brush.linearGradient(
+                                listOf(Color(0xFFEDE6FF), Color(0xFFDCD0FF))
+                            )
+                        ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "FIXLY",
+                            color = Color(0xFF5131B5),
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 2.sp
+                        )
+                    }
+                }
             )
             Box(
                 modifier = Modifier
@@ -1305,7 +1339,7 @@ private fun ProviderDashboardView(
         ) {
             Box(
                 modifier = Modifier.fillMaxWidth()
-                    .background(Brush.linearGradient(listOf(Color(0xFF111827), Color(0xFF064E3B), Color(0xFF0F766E))))
+                    .background(Brush.linearGradient(listOf(Color(0xFF17153B), Color(0xFF45218E), Color(0xFF7044F5))))
                     .padding(24.dp)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -1388,8 +1422,8 @@ private fun TrustVerificationBanner(
                 .background(
                     brush = Brush.horizontalGradient(
                         colors = listOf(
-                            Color(0xFF0F172A), // Slate 900
-                            Color(0xFF020617)  // Indigo 950
+                            Color(0xFF21164F),
+                            Color(0xFF120F2D)
                         )
                     )
                 )
@@ -1406,7 +1440,7 @@ private fun TrustVerificationBanner(
                         .clip(CircleShape)
                         .background(
                             brush = Brush.linearGradient(
-                                colors = listOf(Color(0xFF3B82F6), Color(0xFF06B6D4))
+                                colors = listOf(Color(0xFF8B5CF6), Color(0xFF5B35D5))
                             )
                         )
                         .padding(2.dp)
@@ -1415,13 +1449,13 @@ private fun TrustVerificationBanner(
                         modifier = Modifier
                             .fillMaxSize()
                             .clip(CircleShape)
-                            .background(Color(0xFF0F172A)),
+                            .background(Color(0xFF21164F)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Security,
                             contentDescription = null,
-                            tint = Color(0xFF60A5FA),
+                            tint = Color(0xFFC4B5FD),
                             modifier = Modifier.size(24.dp)
                         )
                     }
@@ -1445,7 +1479,7 @@ private fun TrustVerificationBanner(
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
                             contentDescription = null,
-                            tint = Color(0xFF60A5FA),
+                            tint = Color(0xFFC4B5FD),
                             modifier = Modifier.size(15.dp)
                         )
                     }
