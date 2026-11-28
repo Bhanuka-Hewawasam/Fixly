@@ -12,16 +12,16 @@ val Typography = Typography(
     headlineLarge = TextStyle(
         fontFamily = FixlyFont,
         fontWeight = FontWeight.Bold,
-        fontSize = 32.sp,
-        lineHeight = 39.sp,
-        letterSpacing = (-0.7).sp
+        fontSize = 31.sp,
+        lineHeight = 38.sp,
+        letterSpacing = (-0.8).sp
     ),
     headlineMedium = TextStyle(
         fontFamily = FixlyFont,
         fontWeight = FontWeight.Bold,
-        fontSize = 27.sp,
-        lineHeight = 34.sp,
-        letterSpacing = (-0.45).sp
+        fontSize = 26.sp,
+        lineHeight = 33.sp,
+        letterSpacing = (-0.55).sp
     ),
     headlineSmall = TextStyle(
         fontFamily = FixlyFont,
@@ -33,8 +33,8 @@ val Typography = Typography(
     titleLarge = TextStyle(
         fontFamily = FixlyFont,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 18.sp,
-        lineHeight = 25.sp
+        fontSize = 19.sp,
+        lineHeight = 26.sp
     ),
     titleMedium = TextStyle(
         fontFamily = FixlyFont,
@@ -59,8 +59,8 @@ val Typography = Typography(
         fontFamily = FixlyFont,
         fontWeight = FontWeight.Normal,
         fontSize = 14.sp,
-        lineHeight = 21.sp,
-        letterSpacing = 0.15.sp
+        lineHeight = 22.sp,
+        letterSpacing = 0.1.sp
     ),
     bodySmall = TextStyle(
         fontFamily = FixlyFont,

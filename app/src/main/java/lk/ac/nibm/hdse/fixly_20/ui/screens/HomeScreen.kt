@@ -5,6 +5,7 @@ import androidx.compose.animation.animateContentSize
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -27,6 +28,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -40,6 +42,7 @@ import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
 import kotlinx.coroutines.delay
 import lk.ac.nibm.hdse.fixly_20.BuildConfig
+import lk.ac.nibm.hdse.fixly_20.R
 import lk.ac.nibm.hdse.fixly_20.data.repository.EmergencyAlertRepository
 import lk.ac.nibm.hdse.fixly_20.ui.components.CategoryCard
 import lk.ac.nibm.hdse.fixly_20.ui.components.EmergencyChip
@@ -983,8 +986,10 @@ private fun CustomerDashboardView(
                 Icon(Icons.Outlined.Search, contentDescription = "Search services")
             },
             trailingIcon = {
-                IconButton(onClick = onPostJob) {
-                    Icon(Icons.Outlined.Tune, contentDescription = "Browse services")
+                if (searchQuery.isNotBlank()) {
+                    IconButton(onClick = { searchQuery = "" }) {
+                        Icon(Icons.Outlined.Close, contentDescription = "Clear search")
+                    }
                 }
             },
             colors = OutlinedTextFieldDefaults.colors(
@@ -1006,9 +1011,9 @@ private fun CustomerDashboardView(
                     .fillMaxWidth()
                     .heightIn(min = 250.dp)
             ) {
-                SubcomposeAsyncImage(
-                    model = "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=1200&auto=format&fit=crop&q=90",
-                    contentDescription = "Professional home service technician at work",
+                Image(
+                    painter = painterResource(id = R.drawable.real_service_provider),
+                    contentDescription = "Fixly home service professional",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -1042,7 +1047,7 @@ private fun CustomerDashboardView(
                             Icon(
                                 Icons.Outlined.VerifiedUser,
                                 contentDescription = null,
-                                tint = Color(0xFFB7F34A),
+                                tint = Color(0xFFD6C8FF),
                                 modifier = Modifier.size(15.dp)
                             )
                             Text(
@@ -1071,8 +1076,8 @@ private fun CustomerDashboardView(
                         onClick = onPostJob,
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFB7F34A),
-                            contentColor = Color(0xFF14213D)
+                            containerColor = Color(0xFFD6C8FF),
+                            contentColor = Color(0xFF21164F)
                         ),
                         contentPadding = PaddingValues(horizontal = 17.dp, vertical = 13.dp)
                     ) {
@@ -1191,7 +1196,7 @@ private fun CustomerDashboardView(
                         .background(Color.White.copy(alpha = 0.12f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Outlined.Shield, null, tint = Color(0xFFB7F34A), modifier = Modifier.size(25.dp))
+                    Icon(Icons.Outlined.Shield, null, tint = Color(0xFFD6C8FF), modifier = Modifier.size(25.dp))
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("Book with more confidence", color = Color.White, fontWeight = FontWeight.Bold)

@@ -127,9 +127,16 @@ fun AvailableJobsScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
+                    actionIconContentColor = MaterialTheme.colorScheme.onSurface
+                ),
                 title = {
                     Column {
                         Text(
@@ -137,14 +144,14 @@ fun AvailableJobsScreen(
                             style = MaterialTheme.typography.titleLarge.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 20.sp,
-                                color = Color(0xFF0F172A)
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         )
                         Spacer(modifier = Modifier.height(1.dp))
                         Text(
                             text = "Western Province • Sri Lanka",
                             style = MaterialTheme.typography.bodySmall.copy(
-                                color = Color(0xFF64748B),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 12.sp
                             )
                         )
@@ -164,8 +171,8 @@ fun AvailableJobsScreen(
                 actions = {
                     Surface(
                         shape = RoundedCornerShape(50),
-                        color = Color(0xFFDCFCE7),
-                        border = BorderStroke(1.dp, Color(0xFFBBF7D0)),
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                         modifier = Modifier.padding(end = 16.dp)
                     ) {
                         Row(
@@ -176,14 +183,14 @@ fun AvailableJobsScreen(
                                 modifier = Modifier
                                     .size(7.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0xFF16A34A))
+                                    .background(MaterialTheme.colorScheme.tertiary)
                             )
                             Spacer(modifier = Modifier.width(5.dp))
                             Text(
                                 text = "Live",
                                 style = MaterialTheme.typography.labelMedium.copy(
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF16A34A),
+                                    color = MaterialTheme.colorScheme.tertiary,
                                     fontSize = 12.sp
                                 )
                             )
@@ -256,7 +263,7 @@ fun AvailableJobsScreen(
                                 Icon(
                                     imageVector = Icons.Outlined.Tune,
                                     contentDescription = "Filter",
-                                    tint = Color(0xFF475569),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -270,16 +277,16 @@ fun AvailableJobsScreen(
                                 shape = RoundedCornerShape(14.dp),
                                 label = { Text("$km km", fontWeight = FontWeight.Bold, fontSize = 13.sp) },
                                 colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = Color(0xFF2563EB),
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary,
                                     selectedLabelColor = Color.White,
                                     containerColor = MaterialTheme.colorScheme.surface,
-                                    labelColor = Color(0xFF334155)
+                                    labelColor = MaterialTheme.colorScheme.onSurface
                                 ),
                                 border = FilterChipDefaults.filterChipBorder(
                                     enabled = true,
                                     selected = isSelected,
-                                    borderColor = Color(0xFFCBD5E1),
-                                    selectedBorderColor = Color(0xFF2563EB)
+                                    borderColor = MaterialTheme.colorScheme.outline,
+                                    selectedBorderColor = MaterialTheme.colorScheme.primary
                                 )
                             )
                         }
@@ -323,6 +330,39 @@ fun AvailableJobsScreen(
                             }
                         }
                     } else {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 2.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    text = "Nearby opportunities",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Choose a request that matches your skills",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = MaterialTheme.colorScheme.primaryContainer
+                            ) {
+                                Text(
+                                    text = "${uiState.visibleJobs.size} OPEN",
+                                    modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(20.dp),
@@ -382,8 +422,8 @@ private fun JobCard(job: JobPost, distanceKm: Double, onPlaceBid: () -> Unit) {
     val distanceText = String.format(Locale.getDefault(), "%.1f", distanceKm)
     val categoryIcon = getCategoryVectorIcon(job.category)
 
-    val statusContainerColor = if (job.isEmergency) Color(0xFFFEF3C7) else Color(0xFFEFF6FF)
-    val statusTextColor = if (job.isEmergency) Color(0xFFD97706) else Color(0xFF2563EB)
+    val statusContainerColor = if (job.isEmergency) Color(0xFFFEF3C7) else MaterialTheme.colorScheme.primaryContainer
+    val statusTextColor = if (job.isEmergency) Color(0xFFD97706) else MaterialTheme.colorScheme.primary
     val statusText = if (job.isEmergency) "High Priority" else "Accepting Bids"
 
     val customerInitials = job.customerName.split(" ").let { parts ->
@@ -395,7 +435,7 @@ private fun JobCard(job: JobPost, distanceKm: Double, onPlaceBid: () -> Unit) {
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -416,13 +456,13 @@ private fun JobCard(job: JobPost, distanceKm: Double, onPlaceBid: () -> Unit) {
                         modifier = Modifier
                             .size(44.dp)
                             .clip(RoundedCornerShape(14.dp))
-                            .background(Color(0xFFEFF6FF)),
+                            .background(MaterialTheme.colorScheme.primaryContainer),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = categoryIcon,
                             contentDescription = null,
-                            tint = Color(0xFF2563EB),
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(22.dp)
                         )
                     }
@@ -432,14 +472,14 @@ private fun JobCard(job: JobPost, distanceKm: Double, onPlaceBid: () -> Unit) {
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp,
-                                color = Color(0xFF1E293B)
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = "Request #JOB-${job.jobId.takeLast(4).uppercase()}",
                             style = MaterialTheme.typography.bodySmall.copy(
-                                color = Color(0xFF64748B),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 12.sp
                             )
                         )
@@ -477,15 +517,15 @@ private fun JobCard(job: JobPost, distanceKm: Double, onPlaceBid: () -> Unit) {
             if (job.description.isNotBlank()) {
                 Surface(
                     shape = RoundedCornerShape(14.dp),
-                    color = Color(0xFFF8FAFC),
-                    border = BorderStroke(1.dp, Color(0xFFF1F5F9)),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.surfaceVariant),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
                         text = "\"${job.description}\"",
                         style = MaterialTheme.typography.bodyMedium.copy(
                             fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                            color = Color(0xFF475569),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 13.5.sp
                         ),
                         modifier = Modifier.padding(14.dp)
@@ -500,8 +540,8 @@ private fun JobCard(job: JobPost, distanceKm: Double, onPlaceBid: () -> Unit) {
             ) {
                 Surface(
                     shape = RoundedCornerShape(14.dp),
-                    color = Color(0xFFF8FAFC),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     modifier = Modifier.weight(1f)
                 ) {
                     Row(
@@ -513,13 +553,13 @@ private fun JobCard(job: JobPost, distanceKm: Double, onPlaceBid: () -> Unit) {
                             modifier = Modifier
                                 .size(32.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFFFEE2E2)),
+                                .background(MaterialTheme.colorScheme.errorContainer),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.LocationOn,
                                 contentDescription = null,
-                                tint = Color(0xFFEF4444),
+                                tint = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -527,7 +567,7 @@ private fun JobCard(job: JobPost, distanceKm: Double, onPlaceBid: () -> Unit) {
                             Text(
                                 text = "Distance",
                                 style = MaterialTheme.typography.bodySmall.copy(
-                                    color = Color(0xFF64748B),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 11.sp
                                 )
                             )
@@ -536,7 +576,7 @@ private fun JobCard(job: JobPost, distanceKm: Double, onPlaceBid: () -> Unit) {
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp,
-                                    color = Color(0xFF1E293B)
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                             )
                         }
@@ -545,8 +585,8 @@ private fun JobCard(job: JobPost, distanceKm: Double, onPlaceBid: () -> Unit) {
 
                 Surface(
                     shape = RoundedCornerShape(14.dp),
-                    color = Color(0xFFF8FAFC),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     modifier = Modifier.weight(1f)
                 ) {
                     Row(
@@ -558,13 +598,13 @@ private fun JobCard(job: JobPost, distanceKm: Double, onPlaceBid: () -> Unit) {
                             modifier = Modifier
                                 .size(32.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFFEFF6FF)),
+                                .background(MaterialTheme.colorScheme.primaryContainer),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.Schedule,
                                 contentDescription = null,
-                                tint = Color(0xFF2563EB),
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -572,7 +612,7 @@ private fun JobCard(job: JobPost, distanceKm: Double, onPlaceBid: () -> Unit) {
                             Text(
                                 text = "Posted",
                                 style = MaterialTheme.typography.bodySmall.copy(
-                                    color = Color(0xFF64748B),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 11.sp
                                 )
                             )
@@ -581,7 +621,7 @@ private fun JobCard(job: JobPost, distanceKm: Double, onPlaceBid: () -> Unit) {
                                 style = MaterialTheme.typography.titleSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp,
-                                    color = Color(0xFF1E293B)
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                             )
                         }
@@ -606,7 +646,7 @@ private fun JobCard(job: JobPost, distanceKm: Double, onPlaceBid: () -> Unit) {
                             .clip(CircleShape)
                             .background(
                                 brush = Brush.linearGradient(
-                                    colors = listOf(Color(0xFF2563EB), Color(0xFF4F46E5))
+                                    colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)
                                 )
                             )
                     ) {
@@ -623,7 +663,7 @@ private fun JobCard(job: JobPost, distanceKm: Double, onPlaceBid: () -> Unit) {
                         style = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp,
-                            color = Color(0xFF1E293B)
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     )
                 }
@@ -635,13 +675,13 @@ private fun JobCard(job: JobPost, distanceKm: Double, onPlaceBid: () -> Unit) {
                     Icon(
                         imageVector = Icons.Outlined.Verified,
                         contentDescription = null,
-                        tint = Color(0xFF16A34A),
+                        tint = MaterialTheme.colorScheme.tertiary,
                         modifier = Modifier.size(14.dp)
                     )
                     Text(
                         text = "Verified Customer",
                         style = MaterialTheme.typography.bodySmall.copy(
-                            color = Color(0xFF64748B),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -653,7 +693,7 @@ private fun JobCard(job: JobPost, distanceKm: Double, onPlaceBid: () -> Unit) {
             Button(
                 onClick = onPlaceBid,
                 shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 modifier = Modifier.fillMaxWidth().height(48.dp)
             ) {
                 Icon(Icons.AutoMirrored.Outlined.Send, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -690,7 +730,7 @@ private fun BidDialog(
             shape = RoundedCornerShape(28.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
@@ -707,13 +747,13 @@ private fun BidDialog(
                 ) {
                     Surface(
                         shape = RoundedCornerShape(50),
-                        color = Color(0xFFEFF6FF)
+                        color = MaterialTheme.colorScheme.primaryContainer
                     ) {
                         Text(
                             text = "ACTIVE JOB",
                             style = MaterialTheme.typography.labelMedium.copy(
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF2563EB),
+                                color = MaterialTheme.colorScheme.primary,
                                 fontSize = 11.sp
                             ),
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
@@ -728,7 +768,7 @@ private fun BidDialog(
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = "Close",
-                            tint = Color(0xFF64748B),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -743,7 +783,7 @@ private fun BidDialog(
                         modifier = Modifier
                             .size(9.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF2563EB))
+                            .background(MaterialTheme.colorScheme.primary)
                     ) {
                         Box(
                             modifier = Modifier
@@ -758,7 +798,7 @@ private fun BidDialog(
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 20.sp,
-                            color = Color(0xFF0F172A)
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     )
                 }
@@ -766,8 +806,8 @@ private fun BidDialog(
                 // Job Details Box
                 Surface(
                     shape = RoundedCornerShape(14.dp),
-                    color = Color(0xFFF8FAFC),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -824,14 +864,14 @@ private fun BidDialog(
                             Icon(
                                 imageVector = Icons.Outlined.Handyman,
                                 contentDescription = null,
-                                tint = Color(0xFF2563EB),
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(15.dp)
                             )
                             Text(
                                 text = job.description,
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     fontWeight = FontWeight.Medium,
-                                    color = Color(0xFF334155),
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     fontSize = 13.sp
                                 ),
                                 maxLines = 3
@@ -846,13 +886,13 @@ private fun BidDialog(
                                 Icon(
                                     imageVector = Icons.Outlined.Schedule,
                                     contentDescription = null,
-                                    tint = Color(0xFF64748B),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Text(
                                     text = "Preferred: ${job.preferredDate} ${job.preferredTime}",
                                     style = MaterialTheme.typography.bodySmall.copy(
-                                        color = Color(0xFF64748B),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         fontSize = 11.5.sp
                                     )
                                 )
@@ -867,13 +907,13 @@ private fun BidDialog(
                                 Icon(
                                     imageVector = Icons.Outlined.LocationOn,
                                     contentDescription = null,
-                                    tint = Color(0xFF64748B),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Text(
                                     text = "Distance: ${String.format(Locale.getDefault(), "%.1f", dist)} km",
                                     style = MaterialTheme.typography.bodySmall.copy(
-                                        color = Color(0xFF64748B),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         fontSize = 11.5.sp
                                     )
                                 )
@@ -894,10 +934,10 @@ private fun BidDialog(
                     singleLine = true,
                     enabled = !isSubmitting,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF2563EB),
-                        unfocusedBorderColor = Color(0xFFCBD5E1),
-                        focusedContainerColor = Color(0xFFF8FAFC),
-                        unfocusedContainerColor = Color(0xFFF8FAFC)
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -910,10 +950,10 @@ private fun BidDialog(
                     shape = RoundedCornerShape(14.dp),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF2563EB),
-                        unfocusedBorderColor = Color(0xFFCBD5E1),
-                        focusedContainerColor = Color(0xFFF8FAFC),
-                        unfocusedContainerColor = Color(0xFFF8FAFC)
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
                     ),
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !isSubmitting
@@ -933,10 +973,10 @@ private fun BidDialog(
                     enabled = !isSubmitting,
                     isError = !etaIsValid,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF2563EB),
-                        unfocusedBorderColor = Color(0xFFCBD5E1),
-                        focusedContainerColor = Color(0xFFF8FAFC),
-                        unfocusedContainerColor = Color(0xFFF8FAFC)
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
                     ),
                     supportingText = {
                         if (!etaIsValid) Text("Enter 1 to 1440 mins.")
@@ -958,7 +998,7 @@ private fun BidDialog(
                         }
                     },
                     shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     enabled = !isSubmitting && timeConflict == null &&
                         priceValue != null && priceValue > 0.0 && etaIsValid,
                     modifier = Modifier.fillMaxWidth().height(50.dp)
@@ -998,7 +1038,7 @@ private fun BidDialog(
                         "Cancel",
                         style = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF2563EB)
+                            color = MaterialTheme.colorScheme.primary
                         )
                     )
                 }
